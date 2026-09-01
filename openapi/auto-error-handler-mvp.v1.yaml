@@ -30,6 +30,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEventAccepted' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
@@ -95,6 +96,8 @@ paths:
       tags: [Approvals]
       operationId: approveIncidentPatch
       summary: 최신 분석의 패치 승인
+      description: 승인 request body는 DEC-007이 OPEN이므로 아직 확정하지 않았다. 구현 전에 analysisRunId와 expectedBaseCommitSha 포함 여부를 결정한다.
+      x-decision-id: DEC-007
       parameters:
         - $ref: '#/components/parameters/IncidentId'
         - name: Idempotency-Key
@@ -141,6 +144,11 @@ components:
       schema: { type: string, format: uuid }
 
   responses:
+    BadRequest:
+      description: JSON syntax, header 또는 body 크기 오류
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     NotFound:
       description: 등록 서비스 또는 리소스가 없음
       content:

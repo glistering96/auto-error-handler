@@ -146,8 +146,12 @@ HTTP/1.1 202 Accepted
 
 ```json
 {
+  "type": "urn:aeh:error:event-schema-invalid",
+  "title": "Error event validation failed",
+  "status": 422,
   "code": "AEH-EVENT-422-001",
-  "message": "Request does not match external-error-event-v1 schema",
+  "detail": "Request does not match external-error-event-v1 schema",
+  "instance": "/v1/error-events/bf2e277e-7640-4bb2-947a-a4f639f1ec44",
   "traceId": "..."
 }
 ```

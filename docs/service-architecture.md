@@ -4,6 +4,8 @@
 작성일: 2026-09-01  
 범위: 기능 검증용 단일 서비스 MVP
 
+협업 시 결정 상태는 [MVP 의사결정 대장](decision-register.md), 모듈 간 세부 계약은 [DB·Worker·Codex 구현 계약](implementation-contracts.md)을 기준으로 합니다.
+
 ## 1. 목표
 
 외부 서비스가 HTTP로 오류 이벤트를 보내면 Auto Error Handler가 등록된 저장소에서 원인을 분석하고, 사용자가 승인한 경우에만 격리된 작업공간에서 패치를 생성합니다. 등록된 검증 명령을 통과한 결과는 diff와 실행 로그로 제공합니다.
@@ -144,6 +146,8 @@ MVP 승인 API에는 사용자 인증이 없습니다.
 ```text
 POST /v1/incidents/{incidentId}/approve
 ```
+
+승인 request body의 `analysisRunId`와 `expectedBaseCommitSha` 포함 여부는 [DEC-007](decision-register.md)에서 확정합니다. 결정 전 OpenAPI에는 미확정 상태를 명시합니다.
 
 API는 다음만 확인합니다.
 
