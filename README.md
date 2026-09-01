@@ -18,6 +18,7 @@ HTTP 오류 이벤트 수신
 ## MVP 원칙
 
 - 외부 서비스는 RabbitMQ가 아니라 HTTP API로 오류를 전송합니다.
+- 오류 문구와 함께 재현 절차, 비식별 입력, 기대·실제 결과를 선택적으로 전송할 수 있습니다.
 - 서비스는 요청 body의 `serviceKey`로 식별합니다. 서비스 인증은 MVP 이후에 추가합니다.
 - Incident와 Job 상태의 진실 공급원은 PostgreSQL입니다.
 - 별도 MQ 없이 PostgreSQL Job Queue로 비동기 작업을 처리합니다.
