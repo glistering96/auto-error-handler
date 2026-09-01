@@ -209,6 +209,9 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Local CodeGraph index
+.codegraph/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

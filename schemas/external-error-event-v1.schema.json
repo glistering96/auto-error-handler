@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auto-error-handler:schema:external-error-event:1.0",
+  "title": "Auto Error Handler External Error Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "specVersion",
+    "id",
+    "type",
+    "source",
+    "subject",
+    "time",
+    "organizationId",
+    "service",
+    "data"
+  ],
+  "properties": {
+    "specVersion": { "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "type": { "const": "com.auto-error-handler.error.occurred.v1" },
+    "source": { "type": "string", "format": "uri", "maxLength": 256 },
+    "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "time": { "type": "string", "format": "date-time" },
+    "organizationId": { "type": "string", "format": "uuid" },
+    "service": { "$ref": "#/$defs/service" },
+    "data": { "$ref": "#/$defs/errorData" }
+  },
+  "$defs": {
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "environment"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        },
+        "environment": {
+          "enum": ["production", "staging", "development", "test"]
+        }
+      }
+    },
+    "errorData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "title", "message"],
+      "properties": {
+        "severity": { "enum": ["warning", "error", "critical"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 8192 },
+        "fingerprint": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "exception": { "$ref": "#/$defs/exception" },
+        "release": { "$ref": "#/$defs/release" },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "traceContext": { "$ref": "#/$defs/traceContext" },
+        "request": { "$ref": "#/$defs/request" },
+        "tags": {
+          "type": "object",
+          "maxProperties": 50,
+          "propertyNames": { "minLength": 1, "maxLength": 64 },
+          "additionalProperties": { "type": "string", "maxLength": 256 }
+        },
+        "logReferences": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/logReference" }
+        },
+        "extensions": {
+          "type": "object",
+          "maxProperties": 20,
+          "propertyNames": { "minLength": 1, "maxLength": 64 },
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string", "maxLength": 1024 },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "message"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 8192 },
+        "stackTrace": { "type": "string", "maxLength": 65536 },
+        "causes": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/exceptionCause" }
+        }
+      }
+    },
+    "exceptionCause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "message"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 8192 }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-fA-F]{7,64}$" },
+        "deployedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "maxLength": 64 },
+        "version": { "type": "string", "maxLength": 64 },
+        "region": { "type": "string", "maxLength": 64 },
+        "instanceId": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "traceContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "traceId": { "type": "string", "pattern": "^[0-9a-fA-F]{32}$" },
+        "spanId": { "type": "string", "pattern": "^[0-9a-fA-F]{16}$" },
+        "requestId": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        },
+        "route": { "type": "string", "maxLength": 500 },
+        "statusCode": { "type": "integer", "minimum": 100, "maximum": 599 }
+      }
+    },
+    "logReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "locator"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        },
+        "locator": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
