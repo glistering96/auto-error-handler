@@ -29,11 +29,13 @@ HTTP 오류 이벤트 수신
 
 ## 문서
 
+- [통합 웹 문서: 비즈니스 로직·API 계약·Job Queue](auto-error-handler-mvp-guide.html)
 - [인터랙티브 서비스 흐름 Walkthrough](walkthrough-auto-error-handler.html)
 - [서비스 아키텍처](docs/service-architecture.md)
 - [세부 구현 계획](docs/implementation-plan.md)
 - [HTTP 오류 이벤트 계약 v1](docs/contracts/external-error-event-v1.md)
 - [오류 이벤트 JSON Schema](schemas/external-error-event-v1.schema.json)
+- [OpenAPI 3.1 MVP 계약](openapi/auto-error-handler-mvp.v1.yaml)
 
 ## MVP에서 제외하는 항목
 

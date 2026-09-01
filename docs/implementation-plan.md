@@ -491,7 +491,40 @@ subprocess.run(
 - 성공한 patch의 diff와 검증 결과를 API로 조회할 수 있습니다.
 - 중복 승인과 Worker 재시작이 중복 patch run을 만들지 않습니다.
 
-## 15. MVP 이후
+## 15. 구현 전 의사결정
+
+구현 전에 아래 값을 확정하고 설정 또는 상수로 기록합니다. 괄호 안은 MVP 권장값입니다.
+
+1. Incident grouping 규칙: producer fingerprint 우선, fallback 정규화 조합.
+2. 기준 commit 선택: `release.commitSha` 우선, 없으면 등록된 default branch HEAD snapshot.
+3. 분석 승인 유효성: 분석 SHA가 현재 SHA와 다르면 `409` 후 재분석.
+4. 재시도 범위: infrastructure 실패만 지수 backoff 최대 2회.
+5. timeout과 크기: 분석 10분, patch 15분, validation 10분, payload 256KB, diff 2,000줄.
+6. validation command: 서비스 등록 설정의 allowlist만 실행.
+7. patch 제한: 허용 경로, 최대 파일 수, binary·symlink·submodule 금지.
+8. 실패 보존: 구조화 error와 제한된 log를 저장하고 worktree는 조사 TTL 뒤 삭제.
+9. 승인 방식: 개발망의 API 직접 승인, 사용자 인증과 승인자 identity는 후속.
+10. 성공 조건: diff 정책과 모든 validation이 통과할 때만 `PATCH_READY`.
+
+가장 먼저 고정해야 하는 것은 fingerprint, 기준 SHA, validation allowlist, patch 제한입니다. 이 값은 데이터 모델, 상태 전이, 보안 경계와 E2E fixture에 직접 영향을 줍니다.
+
+## 16. Scale-out 준비와 전환 조건
+
+MVP부터 다음 경계를 지킵니다.
+
+- API는 로컬 workflow 상태를 갖지 않는 stateless process로 둡니다.
+- Worker claim은 `FOR UPDATE SKIP LOCKED`와 lease(`locked_by`, `locked_at`)를 사용합니다.
+- Job 완료 처리는 멱등하게 만들고 stale lease를 회수합니다.
+- Job마다 고유 worktree와 Codex process를 사용하고 host별 동시성을 제한합니다.
+- repository mirror cache와 writable worktree를 분리합니다.
+- queue depth/age, claim latency, 실행 시간, 실패·retry, token 비용, 디스크를 계측합니다.
+- 서비스별 rate limit·동시성 및 global pending limit으로 backpressure를 겁니다.
+
+확장 순서는 API replica, PostgreSQL HA/connection pool, Worker replica와 lease, 실행 sandbox·관측 순입니다. PostgreSQL polling 또는 쓰기 부하가 실제 병목이 되면 Transactional Outbox와 RabbitMQ를 추가합니다. 이때 retry queue, DLQ, poison-message 격리와 replay 도구도 함께 설계합니다.
+
+여러 호스트에서 patch를 실행할 때는 container 또는 VM sandbox, 결과 artifact 저장소, 중앙 log가 필요합니다. 멀티테넌시가 필요해지는 시점에는 서비스 인증, tenant 격리, RBAC, Secret Manager, audit log를 추가합니다.
+
+## 17. MVP 이후
 
 MVP 완료 뒤 우선순위:
 

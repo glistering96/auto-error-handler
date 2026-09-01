@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Auto Error Handler MVP 비즈니스 로직, API 계약, Job Queue 구조 통합 가이드">
+  <title>Auto Error Handler MVP Guide</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07101d;--panel:#101d30;--raised:#17283f;--line:#29405d;--text:#eef6ff;--muted:#9fb1c9;--mint:#6ee7b7;--blue:#80bfff;--yellow:#ffd479;--red:#ff91a1;--code:#050a12}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:76px}body{margin:0;background:radial-gradient(circle at 15% 0,rgba(55,112,172,.32),transparent 30rem),radial-gradient(circle at 95% 10%,rgba(34,133,105,.18),transparent 26rem),var(--bg);color:var(--text);font-family:Inter,Pretendard,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.68}code,pre{font-family:"SFMono-Regular",Consolas,monospace}.top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:11px max(20px,calc((100vw - 1200px)/2));border-bottom:1px solid #21344c;background:rgba(7,16,29,.86);backdrop-filter:blur(15px)}.brand{font-weight:850}.brand b,.label{color:var(--mint)}.top nav{display:flex;gap:5px}.top a,.side a{color:var(--muted);text-decoration:none}.top a{padding:7px 9px;border-radius:8px;font-size:.78rem}.top a:hover,.side a:hover,.side a.active{color:var(--text);background:var(--raised)}.page{width:min(1200px,calc(100% - 34px));margin:auto}.hero{padding:72px 0 54px}.eyebrow,.label{font-size:.69rem;font-weight:850;letter-spacing:.15em;text-transform:uppercase}.hero h1{max-width:900px;margin:12px 0 18px;font-size:clamp(2.8rem,7vw,5.9rem);line-height:.98;letter-spacing:-.06em}.lead,.intro,p{color:var(--muted)}.lead{max-width:820px;font-size:1.08rem}.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:26px}.chip{padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:#101d30;color:var(--muted);font-size:.76rem}.chip b{color:var(--text)}.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:38px;align-items:start}.side{position:sticky;top:82px;padding:13px;border:1px solid var(--line);border-radius:15px;background:rgba(16,29,48,.86)}.side strong{display:block;padding:5px 8px 9px;color:var(--muted);font-size:.65rem;letter-spacing:.14em;text-transform:uppercase}.side a{display:block;padding:7px 8px;border-radius:7px;font-size:.8rem}main{min-width:0;padding-bottom:80px}section{margin-bottom:74px}h2{margin:7px 0 12px;font-size:clamp(1.8rem,4vw,2.6rem);letter-spacing:-.04em}h3{margin:0 0 7px;font-size:1.02rem}.intro{max-width:790px;margin:0 0 23px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.three{grid-template-columns:repeat(3,minmax(0,1fr))}.card{padding:19px;border:1px solid var(--line);border-radius:14px;background:rgba(16,29,48,.9)}.card p{margin:0;font-size:.87rem}.diagram{display:grid;grid-template-columns:1fr 40px 1fr 40px 1fr;align-items:stretch;margin:22px 0}.node{padding:18px 12px;border:1px solid var(--line);border-radius:13px;background:var(--panel);text-align:center}.node span{display:block;margin-top:4px;color:var(--muted);font-size:.72rem}.arrow{display:grid;place-items:center;color:var(--mint);font-size:1.2rem}.flow{display:grid;gap:8px}.step{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:14px;padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.num{width:37px;height:37px;display:grid;place-items:center;border-radius:11px;background:var(--mint);color:#062219;font-weight:900}.step p{margin:1px 0 0;font-size:.83rem}.owner{padding:5px 8px;border-radius:999px;background:var(--raised);color:var(--blue);font-size:.67rem}.down{text-align:center;color:var(--muted)}.callout{margin-top:15px;padding:17px 19px;border:1px solid rgba(110,231,183,.4);border-radius:13px;background:rgba(23,91,73,.16)}.callout b{color:var(--mint)}.warn{border-color:rgba(255,212,121,.4);background:rgba(103,73,18,.14)}.warn b{color:var(--yellow)}.states{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:19px 0}.state{padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--raised);font-size:.73rem;font-weight:750}.ok{color:var(--mint)}.fail{color:var(--red)}table{width:100%;margin:16px 0;border-collapse:collapse;font-size:.79rem}th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#17283f}td{color:var(--muted)}td code{color:var(--blue)}.codebox{margin:13px 0;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--code)}.codehead{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px solid var(--line);color:var(--muted);font-size:.7rem}.copy{border:0;border-radius:6px;padding:5px 8px;background:var(--raised);color:var(--muted);cursor:pointer}pre{margin:0;padding:17px;overflow:auto;color:#cfe3f8;font-size:.75rem;line-height:1.62}.tabs{display:flex;gap:7px;flex-wrap:wrap;margin:17px 0 8px}.tab{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}.tab.active{border-color:var(--mint);color:var(--text);background:rgba(110,231,183,.1)}.panel{display:none}.panel.active{display:block}details{border:1px solid var(--line);border-radius:12px;background:var(--panel)}details+details{margin-top:9px}summary{padding:14px 16px;cursor:pointer;font-weight:750}details div{padding:0 16px 15px;color:var(--muted);font-size:.86rem}footer{padding:32px 0 65px;border-top:1px solid var(--line);color:var(--muted);font-size:.8rem}@media(max-width:900px){.layout{grid-template-columns:1fr}.side{display:none}.three{grid-template-columns:1fr}.diagram{grid-template-columns:1fr;gap:7px}.arrow{transform:rotate(90deg)}}@media(max-width:650px){.top nav{display:none}.grid{grid-template-columns:1fr}.step{grid-template-columns:40px 1fr}.owner{grid-column:2;width:max-content}table{display:block;overflow:auto;white-space:nowrap}.hero h1{font-size:3.1rem}}
+  </style>
+</head>
+<body>
+  <header class="top"><div class="brand">Auto Error Handler <b>MVP</b></div><nav><a href="#business">비즈니스</a><a href="#api">API</a><a href="#queue">MQ 구조</a><a href="#decisions">의사결정</a><a href="#scale">확장</a></nav></header>
+  <div class="page">
+    <header class="hero"><div class="eyebrow label">Architecture · Contract · Queue</div><h1>오류를 이해하고,<br>승인 후에만 고친다.</h1><p class="lead">기능 MVP의 비즈니스 로직, HTTP API 계약, PostgreSQL Job Queue와 Codex 실행 구조를 한 문서로 설명합니다.</p><div class="chips"><span class="chip"><b>Ingress</b> HTTP</span><span class="chip"><b>State</b> PostgreSQL</span><span class="chip"><b>Queue</b> DB Job</span><span class="chip"><b>Agent</b> Python Codex SDK</span><span class="chip"><b>Output</b> Validated diff</span></div></header>
+    <div class="layout">
+      <aside class="side"><strong>Contents</strong><a href="#overview">1. 한눈에 보기</a><a href="#business">2. 비즈니스 로직</a><a href="#state">3. 상태와 중복</a><a href="#api">4. API 계약</a><a href="#schema">5. API 스키마</a><a href="#queue">6. MQ 구조</a><a href="#codex">7. Codex 실행</a><a href="#data">8. 데이터 모델</a><a href="#decisions">9. MVP 의사결정</a><a href="#scale">10. Scale-out</a><a href="#scope">11. MVP 경계</a></aside>
+      <main>
+        <section id="overview"><div class="label">01 · Overview</div><h2>한눈에 보는 시스템</h2><p class="intro">서비스가 HTTP로 오류와 재현 정보를 보내면 API가 Incident와 분석 Job을 저장합니다. Codex는 먼저 읽기 전용으로 분석하고, 승인 이후에만 별도 worktree에서 패치합니다.</p><div class="diagram"><div class="node"><b>외부 서비스</b><span>오류·stack trace·재현 정보</span></div><div class="arrow">→</div><div class="node"><b>API + PostgreSQL</b><span>Incident·상태·Job Queue</span></div><div class="arrow">→</div><div class="node"><b>Codex Runner</b><span>분석 → 승인 → 패치·검증</span></div></div><div class="callout"><b>핵심 규칙:</b> writable worktree와 Patch Job은 승인 transaction 이후에만 생성됩니다.</div></section>
+
+        <section id="business"><div class="label">02 · Business Logic</div><h2>Incident 중심 비즈니스 로직</h2><p class="intro">오류 이벤트 한 건이 Incident 한 건은 아닙니다. 같은 원인은 열린 Incident 하나에 occurrence로 누적하고 분석은 최초 한 번만 예약합니다.</p><div class="flow">
+          <div class="step"><div class="num">1</div><div><h3>오류 접수</h3><p>eventId, JSON Schema, serviceKey를 검사합니다.</p></div><span class="owner">Control API</span></div><div class="down">↓</div>
+          <div class="step"><div class="num">2</div><div><h3>Incident grouping</h3><p>fingerprint 또는 exception·stack·route를 정규화해 열린 Incident를 찾습니다.</p></div><span class="owner">Domain</span></div><div class="down">↓</div>
+          <div class="step"><div class="num">3</div><div><h3>Analysis Job</h3><p>새 Incident일 때만 ANALYZE:&lt;incident_id&gt;를 저장합니다.</p></div><span class="owner">PostgreSQL</span></div><div class="down">↓</div>
+          <div class="step"><div class="num">4</div><div><h3>읽기 전용 분석</h3><p>기준 SHA, 오류와 재현 정보로 원인·근거·회귀 테스트 계획을 만듭니다.</p></div><span class="owner">Codex</span></div><div class="down">↓</div>
+          <div class="step"><div class="num">5</div><div><h3>승인</h3><p>Incident를 잠그고 approval, 상태 변경, Patch Job을 함께 기록합니다.</p></div><span class="owner">Control API</span></div><div class="down">↓</div>
+          <div class="step"><div class="num">6</div><div><h3>패치·검증</h3><p>새 worktree와 thread에서 패치하고 실제 diff와 테스트를 검사합니다.</p></div><span class="owner">Patch Runner</span></div>
+        </div><div class="callout"><b>접수 transaction:</b> error_event → incident find/create → occurrence → ANALYZE Job → COMMIT → 202.</div><div class="callout"><b>승인 transaction:</b> incident FOR UPDATE → 최신 분석 확인 → approval → PATCH Job → COMMIT.</div></section>
+
+        <section id="state"><div class="label">03 · State & Idempotency</div><h2>상태와 중복 처리</h2><div class="states"><span class="state">RECEIVED</span>→<span class="state">ANALYZING</span>→<span class="state">AWAITING_APPROVAL</span>→<span class="state">PATCHING</span>→<span class="state">VALIDATING</span>→<span class="state ok">PATCH_READY</span></div><div class="states"><span class="state fail">ANALYSIS_FAILED</span><span class="state fail">PATCH_FAILED</span></div><table><thead><tr><th>입력</th><th>Incident</th><th>Occurrence</th><th>Job</th></tr></thead><tbody><tr><td>같은 eventId 3회</td><td>1</td><td>1</td><td>Analysis 1</td></tr><tr><td>다른 eventId, 같은 fingerprint 3회</td><td>1</td><td>3</td><td>Analysis 1</td></tr><tr><td>같은 승인 3회</td><td>변화 없음</td><td>변화 없음</td><td>Patch 1</td></tr><tr><td>같은 eventId, 다른 payload</td><td colspan="3">409 Conflict</td></tr></tbody></table><div class="callout warn"><b>상태 소유권:</b> Producer는 오류와 재현 context만 보냅니다. ANALYZING, PATCHING 같은 workflow 상태는 PostgreSQL이 소유합니다.</div></section>
+
+        <section id="api"><div class="label">04 · HTTP API Contract</div><h2>API 계약</h2><p class="intro">인증은 MVP 이후에 추가합니다. 현재는 serviceKey로 사전 등록된 repository와 정책을 조회하며 개발 환경에만 노출합니다.</p><div class="tabs"><button class="tab active" data-tab="ingest">오류 접수</button><button class="tab" data-tab="detail">Incident 조회</button><button class="tab" data-tab="approve">승인</button><button class="tab" data-tab="patch">Patch 결과</button></div>
+          <div class="panel active" data-panel="ingest"><div class="codebox"><div class="codehead"><span>POST /v1/error-events</span><button class="copy">복사</button></div><pre><code>POST /v1/error-events
+Content-Type: application/json
+Idempotency-Key: bf2e277e-7640-4bb2-947a-a4f639f1ec44
+
+{
+  "specVersion": "1.0",
+  "eventId": "bf2e277e-7640-4bb2-947a-a4f639f1ec44",
+  "serviceKey": "fixture-api",
+  "environment": "development",
+  "occurredAt": "2026-09-01T12:34:56.789Z",
+  "severity": "error",
+  "title": "User lookup failed",
+  "message": "Cannot read properties of null",
+  "fingerprint": "user-null:get-profile:v1",
+  "exception": {
+    "type": "TypeError",
+    "message": "Cannot read properties of null",
+    "stackTrace": "TypeError: ... at getProfile (...)"
+  },
+  "release": {
+    "version": "fixture-api@1.0.3",
+    "commitSha": "a1b2c3d4e5f678901234567890abcdef12345678"
+  },
+  "reproduction": {
+    "description": "존재하지 않는 사용자 조회 시 재현됩니다.",
+    "preconditions": ["fixture 사용자 데이터가 비어 있음"],
+    "steps": ["userId가 null인 입력 준비", "프로필 API 호출"],
+    "sanitizedInputs": { "userId": null, "includeProfile": true },
+    "expectedBehavior": "404 응답",
+    "actualBehavior": "TypeError와 500 응답",
+    "frequency": "always"
+  }
+}</code></pre></div><div class="grid"><div class="card"><div class="label">202 · 최초</div><h3>접수 완료</h3><p>{ eventId, incidentId, status: "RECEIVED", duplicate: false }</p></div><div class="card"><div class="label">202 · 중복</div><h3>기존 결과</h3><p>새 occurrence와 Job 없이 duplicate: true를 반환합니다.</p></div></div></div>
+          <div class="panel" data-panel="detail"><div class="codebox"><div class="codehead"><span>GET /v1/incidents/{id}</span><button class="copy">복사</button></div><pre><code>{
+  "id": "01K...",
+  "state": "AWAITING_APPROVAL",
+  "occurrenceCount": 3,
+  "baseCommitSha": "a1b2c3d4...",
+  "latestAnalysis": {
+    "summary": "null 결과를 직접 역참조합니다.",
+    "confidence": "high",
+    "evidence": [{ "path": "src/users.py", "explanation": "..." }],
+    "reproductionAssessment": {
+      "reproducible": true,
+      "suggestedRegressionTests": ["존재하지 않는 사용자는 404"]
+    }
+  }
+}</code></pre></div></div>
+          <div class="panel" data-panel="approve"><div class="codebox"><div class="codehead"><span>POST /v1/incidents/{id}/approve</span><button class="copy">복사</button></div><pre><code>202 Accepted
+{
+  "incidentId": "01K...",
+  "approvalId": "01K...",
+  "patchRunId": "01K...",
+  "status": "PATCHING",
+  "duplicate": false
+}</code></pre></div><p>허용 상태가 아니면 409. 중복 승인은 기존 approval과 patch run을 반환합니다.</p></div>
+          <div class="panel" data-panel="patch"><div class="codebox"><div class="codehead"><span>GET /v1/incidents/{id}/patch</span><button class="copy">복사</button></div><pre><code>{
+  "status": "PATCH_READY",
+  "changedFiles": ["src/users.py", "tests/test_users.py"],
+  "diff": "diff --git ...",
+  "validation": [{ "id": "unit", "exitCode": 0 }]
+}</code></pre></div></div>
+          <table><thead><tr><th>코드</th><th>의미</th></tr></thead><tbody><tr><td>202</td><td>commit 완료, 비동기 Job 예약</td></tr><tr><td>404</td><td>등록되지 않은 serviceKey/Incident</td></tr><tr><td>409</td><td>payload 충돌 또는 잘못된 상태</td></tr><tr><td>422</td><td>JSON Schema 실패</td></tr><tr><td>500</td><td>DB 실패. 같은 eventId로 재시도</td></tr></tbody></table><div class="callout warn"><b>재현 정보는 힌트:</b> reproduction 문자열을 shell·SQL·script로 실행하지 않습니다. 등록된 validation command만 실행합니다.</div>
+        </section>
+
+        <section id="schema"><div class="label">05 · API Schema</div><h2>스키마 계층 구조</h2><p class="intro">구현 계약은 OpenAPI 한 파일에서 시작하고, 오류 접수 body만 기존 JSON Schema를 참조합니다. HTTP 규칙과 도메인 payload를 분리해 producer와 backend가 같은 기준으로 검증합니다.</p><div class="diagram"><div class="node"><b>OpenAPI paths</b><span>method·header·status</span></div><div class="arrow">→</div><div class="node"><b>Domain schemas</b><span>Incident·Analysis·Patch</span></div><div class="arrow">→</div><div class="node"><b>Error Event JSON Schema</b><span>오류·재현 context</span></div></div><table><thead><tr><th>계층</th><th>규칙</th><th>대표 타입</th></tr></thead><tbody><tr><td>Command</td><td>접수·승인은 <code>Idempotency-Key</code> 필수, commit 뒤 <code>202</code></td><td>ErrorEventAccepted, ApprovalAccepted</td></tr><tr><td>Query</td><td>현재 lifecycle을 그대로 조회하며 아직 없는 결과는 null 또는 404</td><td>IncidentDetail, AnalysisRun, PatchRun</td></tr><tr><td>Result</td><td>Codex 자유 문장이 아니라 구조화된 근거·변경·검증 결과</td><td>AnalysisResult, Evidence, ValidationStep</td></tr><tr><td>Error</td><td><code>application/problem+json</code>, 안정적인 code와 traceId 제공</td><td>Problem, ValidationProblem</td></tr></tbody></table><div class="callout"><b>실제 계약 파일:</b> <code>openapi/auto-error-handler-mvp.v1.yaml</code>. 오류 접수 body의 단일 원천은 <code>schemas/external-error-event-v1.schema.json</code>입니다.</div></section>
+
+        <section id="queue"><div class="label">06 · MQ Structure</div><h2>MQ 구조: PostgreSQL Job Queue</h2><p class="intro">MVP에는 별도 broker가 없습니다. jobs 테이블이 command queue 역할을 하며 FOR UPDATE SKIP LOCKED로 중복 claim을 막습니다.</p><div class="diagram"><div class="node"><b>Control API</b><span>ANALYZE/PATCH insert</span></div><div class="arrow">→</div><div class="node"><b>PostgreSQL jobs</b><span>PENDING → RUNNING</span></div><div class="arrow">→</div><div class="node"><b>Job Worker</b><span>claim → Runner</span></div></div><div class="codebox"><div class="codehead"><span>Worker claim SQL</span><button class="copy">복사</button></div><pre><code>WITH candidate AS (
+  SELECT id FROM jobs
+  WHERE status='PENDING' AND available_at &lt;= now()
+  ORDER BY created_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+UPDATE jobs
+SET status='RUNNING', locked_by=:worker_id,
+    locked_at=now(), attempt=attempt+1
+WHERE id IN (SELECT id FROM candidate)
+RETURNING *;</code></pre></div><div class="grid three"><div class="card"><div class="label">Atomicity</div><h3>상태+Job</h3><p>Incident와 Job이 같은 transaction이므로 MVP에는 Outbox가 필요 없습니다.</p></div><div class="card"><div class="label">Dedup</div><h3>결정적 key</h3><p>ANALYZE:&lt;incident&gt;, PATCH:&lt;approval&gt; unique key를 씁니다.</p></div><div class="card"><div class="label">Recovery</div><h3>stale 복구</h3><p>오래된 RUNNING을 PENDING으로 돌리고 최대 2회 시도합니다.</p></div></div><div class="states"><span class="state">PENDING</span>→<span class="state">RUNNING</span>→<span class="state ok">SUCCEEDED</span> 또는 <span class="state fail">FAILED</span></div><div class="grid"><div class="card"><div class="label">MVP · 지금</div><h3>PostgreSQL Queue</h3><p>단순하고 도메인 상태와 Job을 원자적으로 저장합니다.</p></div><div class="card"><div class="label" style="color:var(--yellow)">운영 · 나중</div><h3>RabbitMQ</h3><p>높은 처리량, backpressure, retry/DLQ가 실제 필요할 때 도입합니다.</p></div></div><div class="callout"><b>전환 경계:</b> PostgresJobQueue를 RabbitJobQueue로 교체하고 DB Outbox를 추가합니다. HTTP API, Incident 상태 머신, Codex 계약은 유지됩니다.</div></section>
+
+        <section id="codex"><div class="label">07 · Codex Execution</div><h2>분석과 패치를 분리</h2><div class="grid"><div class="card"><div class="label">Analysis Runner</div><h3>Sandbox.read_only</h3><p>오류와 재현 context로 원인·근거·수정 계획을 만들며 저장소를 변경하지 않습니다.</p></div><div class="card"><div class="label">Patch Runner</div><h3>Sandbox.workspace_write</h3><p>승인 후 새 worktree/thread에서 패치하고 실제 diff와 테스트를 검사합니다.</p></div></div><div class="diagram"><div class="node"><b>Python Worker</b><span>입력 구성</span></div><div class="arrow">→</div><div class="node"><b>openai-codex SDK</b><span>JSON-RPC</span></div><div class="arrow">→</div><div class="node"><b>Codex app-server</b><span>OpenAI + workspace</span></div></div><details><summary>Analysis 결과 계약</summary><div>summary, rootCause, confidence, evidence, proposedChanges, validationPlan, reproductionAssessment, risk, missingInformation.</div></details><details><summary>Patch 검증 순서</summary><div>worktree → symlink/submodule → allowed/denied path → 파일 수 → diff line → binary → git diff --check → validation command.</div></details><details><summary>새 thread를 사용하는 이유</summary><div>untrusted 오류·재현 정보와 read-only context가 쓰기 turn에 이어지지 않도록 검증된 분석 결과만 전달합니다.</div></details></section>
+
+        <section id="data"><div class="label">08 · Data Model</div><h2>핵심 데이터 모델</h2><table><thead><tr><th>테이블</th><th>역할</th><th>제약</th></tr></thead><tbody><tr><td>services</td><td>repository·정책</td><td>key UNIQUE</td></tr><tr><td>error_events</td><td>이벤트·checksum</td><td>(service_id,event_id) UNIQUE</td></tr><tr><td>incidents</td><td>fingerprint·상태</td><td>version lock</td></tr><tr><td>occurrences</td><td>개별 발생</td><td>error_event_id UNIQUE</td></tr><tr><td>analysis_runs</td><td>SHA·분석 결과</td><td>active 최대 1</td></tr><tr><td>approvals</td><td>승인</td><td>incident_id UNIQUE</td></tr><tr><td>patch_runs</td><td>diff·validation</td><td>approval_id UNIQUE</td></tr><tr><td>jobs</td><td>command queue</td><td>deduplication_key UNIQUE</td></tr></tbody></table></section>
+
+        <section id="decisions"><div class="label">09 · MVP Decisions</div><h2>구현 전에 확정할 의사결정</h2><p class="intro">아래 항목은 구현 중 자연스럽게 결정되도록 두면 API·DB·Worker가 서로 다른 가정을 갖기 쉽습니다. 권장 기본값으로 먼저 고정하고 E2E 결과로 바꿉니다.</p><table><thead><tr><th>의사결정</th><th>MVP 권장값</th><th>영향</th></tr></thead><tbody><tr><td>Incident grouping</td><td>producer fingerprint 우선, 없으면 exception type + top frame + route 정규화</td><td>과도한 합침·분할과 분석 비용</td></tr><tr><td>기준 commit</td><td>release.commitSha 필수 권장, 없으면 등록된 default branch HEAD snapshot</td><td>재현성, 오래된 분석 승인 처리</td></tr><tr><td>승인 유효성</td><td>분석 SHA와 현재 SHA가 다르면 409 후 재분석</td><td>잘못된 코드에 patch 방지</td></tr><tr><td>재시도</td><td>infra 실패만 지수 backoff 2회, 코드·검증 실패는 자동 재시도 안 함</td><td>중복 비용과 무한 loop</td></tr><tr><td>timeout·크기</td><td>분석 10분, 패치 15분, validation 10분; payload 256KB·diff 2,000줄</td><td>용량 계획과 DoS 경계</td></tr><tr><td>validation command</td><td>서비스 등록 시 allowlist; event의 문자열은 실행 금지</td><td>RCE 방지와 신뢰도</td></tr><tr><td>patch 범위</td><td>허용 경로, 최대 파일 수, binary·symlink·submodule 금지</td><td>쓰기 sandbox 안전성</td></tr><tr><td>실패 결과 보존</td><td>구조화 error code, 제한된 log, worktree는 조사 TTL 후 삭제</td><td>디버깅과 디스크 사용량</td></tr><tr><td>승인 UI/API</td><td>현재는 API 직접 승인, 인증·승인자 identity는 후속</td><td>MVP 노출 범위를 개발망으로 제한</td></tr><tr><td>성공의 정의</td><td>diff 정책 통과 + 등록 validation 전체 성공일 때만 PATCH_READY</td><td>상태 머신과 E2E acceptance</td></tr></tbody></table><div class="callout warn"><b>먼저 결정할 4개:</b> fingerprint 규칙, 기준 SHA, validation allowlist, patch 제한. 나머지는 권장값으로 시작해도 구조 변경이 작습니다.</div></section>
+
+        <section id="scale"><div class="label">10 · Scale-out</div><h2>수평 확장에 필요한 것</h2><p class="intro">API는 먼저 stateless로 늘릴 수 있지만 Worker는 저장소·worktree·Codex 프로세스를 소비합니다. 따라서 API replica 수보다 Job 동시성, 격리, recovery를 먼저 계측해야 합니다.</p><div class="grid three"><div class="card"><div class="label">1 · Stateless API</div><h3>공유 상태 제거</h3><p>모든 workflow 상태를 PostgreSQL에 두고 cursor pagination, connection pool, readiness를 적용합니다.</p></div><div class="card"><div class="label">2 · Worker Lease</div><h3>안전한 다중 claim</h3><p>SKIP LOCKED, locked_by/locked_at, heartbeat, stale lease 회수, idempotent finalize가 필요합니다.</p></div><div class="card"><div class="label">3 · Execution Isolation</div><h3>Job별 workspace</h3><p>고유 경로, CPU·메모리·시간 제한, cleanup, host당 concurrency 제한으로 noisy neighbor를 막습니다.</p></div><div class="card"><div class="label">4 · Repository Cache</div><h3>공유 clone 금지</h3><p>read-only mirror cache와 Job별 worktree를 분리하고 동일 repo lock과 디스크 quota를 둡니다.</p></div><div class="card"><div class="label">5 · Observability</div><h3>병목을 숫자로 확인</h3><p>queue depth/age, claim latency, 실행 시간, 실패율, retry, token 비용, 디스크 사용량을 측정합니다.</p></div><div class="card"><div class="label">6 · Capacity Guard</div><h3>Backpressure</h3><p>서비스별 동시성·rate limit, global quota, max pending, admission control로 폭주를 제한합니다.</p></div></div><table><thead><tr><th>전환 신호</th><th>추가 구성</th></tr></thead><tbody><tr><td>PostgreSQL polling/쓰기 부하가 병목</td><td>Transactional Outbox + RabbitMQ publisher + durable queue</td></tr><tr><td>retry 분리와 장기 backlog 필요</td><td>retry queue, DLQ, poison-message 격리, replay 도구</td></tr><tr><td>여러 호스트에서 patch 실행</td><td>container/VM sandbox, artifact/object storage, 중앙 log</td></tr><tr><td>서비스·조직별 보안 경계 필요</td><td>인증, tenant key, RBAC, secret manager, audit log</td></tr><tr><td>운영 배포 자동화</td><td>GitHub App, branch/PR lifecycle, webhook reconciliation</td></tr></tbody></table><div class="callout"><b>권장 전환 순서:</b> API replica → PostgreSQL HA/pool → Worker replica와 lease → 실행 sandbox/관측 → 실제 병목이 확인될 때 Outbox + RabbitMQ. RabbitMQ만 먼저 넣어도 Codex 실행 처리량은 늘지 않습니다.</div></section>
+
+        <section id="scope"><div class="label">11 · MVP Scope</div><h2>범위와 완료 조건</h2><div class="grid"><div class="card"><div class="label">포함</div><h3>수직 흐름</h3><p>HTTP → Incident → DB Job → 분석 → 승인 → patch → diff/test → 조회.</p></div><div class="card"><div class="label" style="color:var(--yellow)">제외</div><h3>운영 확장</h3><p>인증, 외부 RabbitMQ, Slack, GitHub PR, 멀티테넌시, Kubernetes, 자동 배포.</p></div></div><div class="callout"><b>Definition of Done:</b> fixture 오류를 보내면 근거 있는 분석이 생성되고, 승인 전 diff는 없으며, 승인 후 허용된 변경과 테스트 성공 시에만 PATCH_READY가 됩니다.</div></section>
+      </main>
+    </div>
+    <footer>Auto Error Handler MVP · 비즈니스 로직, API 계약, Job Queue와 Codex 실행 통합 문서</footer>
+  </div>
+  <script>
+    document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===t.dataset.tab))});
+    document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{await navigator.clipboard.writeText(b.closest('.codebox').querySelector('code').innerText);let x=b.textContent;b.textContent='복사됨';setTimeout(()=>b.textContent=x,1000)});
+    const links=[...document.querySelectorAll('.side a')];const o=new IntersectionObserver(es=>{const v=es.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(v)links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+v.target.id))},{rootMargin:'-18% 0 -68% 0',threshold:[0,.2,.5]});document.querySelectorAll('main section[id]').forEach(s=>o.observe(s));
+  </script>
+</body>
+</html>
