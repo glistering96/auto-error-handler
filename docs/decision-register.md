@@ -16,7 +16,22 @@
 
 우선순위 `P0`는 해당 마일스톤 구현 전에 반드시 확정하고, `P1`은 첫 E2E 전에 확정합니다.
 
-## 현재 결정 요약
+## Core Architecture Decisions
+
+아래 여섯 항목은 구현 세부사항보다 상위에 있는 제품·아키텍처 방향이며 모두 `ACCEPTED`입니다.
+
+| ID | 상태 | 큰 결정 | 선택한 방향 |
+|---|---|---|---|
+| CORE-001 | ACCEPTED | 서비스 책임 | 단순 Codex 실행 API가 아니라 Incident·분석·승인·Patch 상태를 소유하는 오류 분석·수정 플랫폼 |
+| CORE-002 | ACCEPTED | Producer 경계 | Producer는 오류·release·재현처럼 관측된 사실만 보내고 workflow 상태는 플랫폼이 소유 |
+| CORE-003 | ACCEPTED | 실행 구조 | MVP는 중앙 Worker를 사용하되 Control Plane과 Execution Plane을 interface/process 경계로 분리 |
+| CORE-004 | ACCEPTED | 자동화 수준 | 분석은 자동으로 실행하고 repository 쓰기는 특정 분석·SHA에 대한 사람 승인 이후에만 허용 |
+| CORE-005 | ACCEPTED | 처리 단위 | 개별 Event가 아니라 같은 원인의 occurrence를 묶은 Incident 중심으로 처리 |
+| CORE-006 | ACCEPTED | 산출물과 로드맵 | MVP 결과는 검증된 Diff이며 이후 GitHub App 기반 Draft PR로 확장 |
+
+이 방향을 바꾸면 API, 상태 머신, 데이터 모델, 보안 경계가 함께 바뀌므로 반드시 ADR을 작성합니다. UUID, timeout, lease 같은 아래 항목은 이 Core Decisions를 구현하기 위한 하위 결정입니다.
+
+## 구현 의사결정 요약
 
 | ID | 우선순위 | 상태 | 주제 | 현재안 또는 권장안 | 확정 시점 |
 |---|---:|---|---|---|---|
