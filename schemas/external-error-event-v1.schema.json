@@ -12,7 +12,8 @@
     "occurredAt",
     "severity",
     "title",
-    "message"
+    "message",
+    "fingerprint"
   ],
   "properties": {
     "specVersion": { "const": "1.0" },
@@ -33,6 +34,7 @@
     "release": { "$ref": "#/$defs/release" },
     "request": { "$ref": "#/$defs/request" },
     "reproduction": { "$ref": "#/$defs/reproduction" },
+    "reproductionData": { "$ref": "#/$defs/reproductionData" },
     "tags": {
       "type": "object",
       "maxProperties": 50,
@@ -73,6 +75,79 @@
         "route": { "type": "string", "maxLength": 500 },
         "statusCode": { "type": "integer", "minimum": 100, "maximum": 599 }
       }
+    },
+    "reproductionData": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["request"] },
+        { "required": ["fixtures"] },
+        { "required": ["featureFlags"] }
+      ],
+      "properties": {
+        "request": { "$ref": "#/$defs/reproductionRequest" },
+        "fixtures": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/reproductionFixture" }
+        },
+        "featureFlags": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "reproductionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["pathParams"] },
+        { "required": ["query"] },
+        { "required": ["headers"] },
+        { "required": ["body"] }
+      ],
+      "properties": {
+        "pathParams": { "$ref": "#/$defs/jsonObject" },
+        "query": { "$ref": "#/$defs/jsonObject" },
+        "headers": {
+          "type": "object",
+          "maxProperties": 20,
+          "propertyNames": {
+            "pattern": "^(content-type|accept|x-fixture-[a-z0-9-]{1,40}|x-test-[a-z0-9-]{1,40})$"
+          },
+          "additionalProperties": { "type": "string", "maxLength": 256 }
+        },
+        "body": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "reproductionFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "data"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "data": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "jsonObject": {
+      "type": "object",
+      "maxProperties": 100,
+      "propertyNames": { "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+      "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+    },
+    "jsonValue": {
+      "anyOf": [
+        { "type": "string", "maxLength": 4096 },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        { "$ref": "#/$defs/jsonObject" }
+      ]
     },
     "reproduction": {
       "type": "object",

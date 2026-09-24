@@ -1,6 +1,11 @@
-# Architecture Decision Records
+# 아키텍처 결정 기록
 
 장기간 유지되거나 여러 모듈에 영향을 주는 결정은 ADR로 기록합니다.
+
+## 확정된 MVP 결정
+
+- [ADR-0001: 오류 사건의 지문과 기준 커밋 고정](0001-event-identity-and-base-sha.md)
+- [ADR-0002: 분석 정책 고정과 실행 환경의 외부 통신](0002-frozen-policy-and-execution-network.md)
 
 ## 파일 규칙
 

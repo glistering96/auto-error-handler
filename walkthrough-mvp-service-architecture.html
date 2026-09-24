@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ko" style="color-scheme: dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auto Error Handler | MVP 서비스 구조</title>
+  <script defer src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script defer src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root { --bg:#000; --surface:#0c0c10; --raised:#17141d; --border:#322b3c; --text:#f9f7fc; --muted:#b5acbf; --purple:#b77bfa; --purple-dark:#4c267a; --amber:#f6c666; --red:#f49b9b; --green:#8fdfbc; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.66 system-ui,-apple-system,"Noto Sans KR",sans-serif; }
+    a { color:#d1a7ff; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    button { font:inherit; }
+    code,pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    code { color:#d9b5ff; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .wrap { width:min(1260px,calc(100% - 40px)); margin:auto; }
+    .topbar { position:sticky; top:0; z-index:50; background:rgba(0,0,0,.9); backdrop-filter:blur(14px); border-bottom:1px solid var(--border); }
+    .topbar-inner { display:flex; gap:24px; align-items:center; min-height:64px; justify-content:space-between; }
+    .brand { color:#fff; font-size:15px; font-weight:750; letter-spacing:.01em; }
+    .topbar nav { display:flex; gap:20px; font-size:13px; }
+    .hero { padding:54px 0 28px; }
+    .eyebrow { margin:0 0 10px; color:var(--purple); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:11px; }
+    h1 { margin:0; font-size:clamp(28px,4.2vw,48px); line-height:1.19; letter-spacing:-.04em; }
+    .hero-sub { max-width:880px; margin:17px 0 0; color:var(--muted); font-size:16px; }
+    .pill-row { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0 0; }
+    .pill { border:1px solid var(--border); border-radius:999px; padding:5px 11px; font-size:12px; color:var(--muted); background:#100e13; }
+    .pill.strong { border-color:#66428d; color:#e8d2ff; }
+    .summary { padding:20px 23px; margin:0 0 32px; border:1px solid #57387a; border-radius:16px; background:linear-gradient(120deg,#20112d,#100d16 68%); }
+    .summary strong { display:block; color:#e8cdff; margin-bottom:6px; }
+    .summary p { margin:0; max-width:970px; }
+    section { scroll-margin-top:85px; margin:0 0 46px; }
+    h2 { font-size:24px; letter-spacing:-.025em; margin:0 0 8px; }
+    h3 { font-size:17px; margin:0 0 9px; }
+    .section-intro { color:var(--muted); margin:0 0 20px; }
+    .diagram-shell { border:1px solid var(--border); border-radius:18px; overflow:hidden; background:radial-gradient(circle at 50% 30%,#170d22,#070608 70%); }
+    .diagram-header { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; padding:13px 17px; border-bottom:1px solid var(--border); background:#0d0a11; }
+    .diagram-header span { color:var(--muted); font-size:12px; }
+    .controls { display:flex; gap:6px; }
+    .controls button,.detail-close { border:1px solid #51405e; border-radius:8px; background:#201727; color:var(--text); padding:5px 10px; cursor:pointer; }
+    .controls button:hover,.detail-close:hover { border-color:var(--purple); }
+    .viewport { height:min(66vw,570px); min-height:400px; overflow:hidden; touch-action:none; cursor:grab; position:relative; }
+    .viewport.dragging { cursor:grabbing; }
+    .diagram-canvas { display:inline-block; padding:45px; transform-origin:0 0; will-change:transform; }
+    .diagram-canvas svg { max-width:none!important; height:auto!important; }
+    .diagram-canvas .node { cursor:pointer; }
+    .diagram-canvas .node:hover { filter:brightness(1.27); }
+    .diagram-fallback { padding:32px; color:var(--muted); }
+    .legend { display:flex; gap:17px; padding:10px 17px 14px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .legend span { display:flex; align-items:center; gap:7px; }
+    .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .detail { position:fixed; z-index:80; right:22px; top:85px; width:min(440px,calc(100vw - 44px)); max-height:calc(100vh - 108px); overflow:auto; background:#110d17; border:1px solid #8154ae; box-shadow:0 18px 70px #000c; border-radius:16px; padding:20px; }
+    .detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+    .detail h3 { margin:0; font-size:19px; }
+    .detail p { color:var(--muted); margin:12px 0; }
+    .detail pre { margin:13px 0; background:#050406; border:1px solid var(--border); border-radius:10px; padding:14px; font-size:12px; line-height:1.58; }
+    .detail .shiki { background:#050406!important; border:1px solid var(--border); border-radius:10px; padding:14px; overflow:auto; font-size:12px; line-height:1.58; }
+    .detail .shiki code { color:inherit; }
+    .source-list { display:grid; gap:4px; border-top:1px solid var(--border); padding-top:12px; margin-top:10px; font-size:12px; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; }
+    .card p { color:var(--muted); margin:0; font-size:14px; }
+    .card .marker { color:var(--purple); font-size:12px; font-weight:700; letter-spacing:.08em; margin-bottom:8px; }
+    .line { border-left:2px solid #704494; padding-left:16px; margin:12px 0 0; }
+    .line p { margin:0 0 12px; }
+    table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; font-size:13px; }
+    th,td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+    th { color:#e6c9ff; background:#1a1022; font-weight:650; }
+    td { color:var(--muted); }
+    tr:last-child td { border-bottom:0; }
+    .state-wrap { border:1px solid var(--border); border-radius:14px; background:#0c0910; overflow:auto; padding:10px; }
+    .state-wrap svg { max-width:100%; }
+    .state-fallback { padding:15px; color:var(--muted); }
+    .review-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .finding { border-left:3px solid var(--amber); }
+    .finding.decided { border-left-color:#55c78a; }
+    .finding p { margin:5px 0 11px; }
+    .finding .tag { color:#55c78a; font-size:12px; font-weight:700; }
+    .phase-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .phase { border:1px solid var(--border); background:var(--surface); border-radius:12px; padding:14px; }
+    .phase b { color:#e7caff; font-size:13px; }
+    .phase p { color:var(--muted); margin:4px 0 0; font-size:12px; }
+    .note { color:var(--muted); font-size:12px; margin-top:12px; }
+    footer { border-top:1px solid var(--border); padding:26px 0 40px; color:var(--muted); font-size:12px; }
+    @media(max-width:850px) { .grid,.review-grid { grid-template-columns:1fr; } .phase-list { grid-template-columns:repeat(2,1fr); } .topbar nav { gap:10px; } .viewport { min-height:360px; } }
+    @media(max-width:570px) { .wrap { width:min(100% - 28px,1260px); } .topbar nav a:nth-child(2) { display:none; } .phase-list { grid-template-columns:1fr; } .hero { padding-top:35px; } }
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="wrap topbar-inner"><a class="brand" href="#top">Auto Error Handler · MVP 구조</a><nav><a href="#architecture">전체 흐름</a><a href="#boundaries">안전 경계</a><a href="#data">데이터·상태</a><a href="#review">계획 검토</a></nav></div></div>
+  <main class="wrap" id="top">
+    <div class="hero">
+      <p class="eyebrow">문서 기반 구조 안내 · 2026-09-24</p>
+      <h1>오류에서 검증된 변경 내역까지</h1>
+      <p class="hero-sub">현재 저장소의 설계 문서를 바탕으로 만든 MVP 구조도입니다. 다이어그램의 요소를 누르면 역할, 관련 계약, 실제 문서 조각을 확인할 수 있습니다.</p>
+      <div class="pill-row"><span class="pill strong">설계 문서 단계</span><span class="pill">외부 입력: HTTP</span><span class="pill">상태·작업: PostgreSQL</span><span class="pill">산출물: 검증된 Git 변경 내역</span></div>
+    </div>
+    <div class="summary"><strong>한눈에 보기</strong><p>오류 이벤트를 사건으로 묶고 PostgreSQL 작업자가 읽기 전용 분석을 수행합니다. 사용자가 분석을 승인하면 새 작업 트리에서 패치를 만들고 실제 Git 변경 내역과 등록된 검증 명령을 확인한 뒤 결과를 저장합니다. 이 흐름은 설계된 목표이며 아직 실행 코드로 구현되지 않았습니다.</p></div>
+
+    <section id="architecture">
+      <h2>전체 흐름</h2>
+      <p class="section-intro">보라색은 서비스가 소유하는 처리, 회색은 외부 주체와 실행 환경, 밝은 보라색은 PostgreSQL 상태입니다. 확대·이동하거나 요소를 눌러 상세 계약을 볼 수 있습니다.</p>
+      <div id="architecture-app"></div>
+    </section>
+
+    <section id="boundaries">
+      <h2>반드시 지켜야 할 경계</h2>
+      <p class="section-intro">MVP의 핵심은 분석 결과를 안전하게 검증된 변경 내역으로 연결하는 데 있습니다.</p>
+      <div class="grid">
+        <div class="card"><div class="marker">01 · 접수</div><h3>사건과 작업을 함께 저장</h3><p>이벤트, 사건·발생 기록, 최초 분석 작업을 하나의 트랜잭션으로 저장합니다. 같은 <code>eventId</code>는 중복 작업을 만들지 않습니다.</p></div>
+        <div class="card"><div class="marker">02 · 분석</div><h3>저장소는 읽기 전용</h3><p>기준 SHA의 분리된 작업 트리에서 분석합니다. 분석 중에는 쓰기 가능한 패치 작업 트리와 <code>PATCH</code> 작업이 존재하지 않아야 합니다.</p></div>
+        <div class="card"><div class="marker">03 · 승인</div><h3>사람이 확인한 분석에 묶음</h3><p>승인 요청은 본문 없이 받습니다. 서버가 성공한 분석과 SHA를 잠금 트랜잭션에서 확인한 뒤 승인·패치 실행·작업을 함께 저장합니다.</p></div>
+        <div class="card"><div class="marker">04 · 실행 소유권</div><h3>늦게 도착한 결과 거부</h3><p>작업을 선점할 때마다 새 <code>claim_token</code>을 발급합니다. 생존 신호와 완료 처리는 현재 토큰을 가진 작업자만 수행합니다.</p></div>
+        <div class="card"><div class="marker">05 · 패치</div><h3>실제 변경 내역 확인</h3><p>새 작업 트리의 Git 변경 내역으로 경로, 파일 종류, 변경량을 확인합니다. 정책 위반이면 검증 명령을 실행하지 않습니다.</p></div>
+        <div class="card"><div class="marker">06 · 검증</div><h3>등록된 명령만 실행</h3><p>서비스 설정에 등록된 인자 배열을 셸 없이 실행합니다. 모든 검증이 통과해야 <code>PATCH_READY</code>가 됩니다.</p></div>
+      </div>
+    </section>
+
+    <section id="data">
+      <h2>상태와 데이터</h2>
+      <p class="section-intro">API와 작업자는 별도 프로세스이지만 아래 기록을 PostgreSQL에서 공유하도록 설계되어 있습니다.</p>
+      <div class="state-wrap" id="state-diagram"><div class="state-fallback">RECEIVED → ANALYZING → AWAITING_APPROVAL → PATCHING → VALIDATING → PATCH_READY<br>분석 실패: ANALYSIS_FAILED · 패치/검증 실패: PATCH_FAILED</div></div>
+      <p class="note">상태 전이는 설계 계약입니다. 실제 DB 마이그레이션과 상태 전이 코드는 아직 없습니다.</p>
+      <div style="overflow-x:auto;margin-top:20px"><table>
+        <thead><tr><th>기록</th><th>역할</th><th>중요한 연결</th></tr></thead>
+        <tbody>
+          <tr><td><code>services</code></td><td>저장소와 실행 정책</td><td>하나의 서비스에 여러 이벤트·사건</td></tr>
+          <tr><td><code>error_events</code></td><td>수신 이벤트와 멱등성 검사</td><td><code>(service_id, event_id)</code> 고유</td></tr>
+          <tr><td><code>incidents</code> / <code>occurrences</code></td><td>같은 지문·전체 SHA의 사건과 개별 발생 기록</td><td>첫 이벤트를 분석 입력으로 고정</td></tr>
+          <tr><td><code>analysis_runs</code></td><td>분석 상태·결과·기준 SHA·정책 고정 사본</td><td>승인은 성공한 분석 하나를 가리킴</td></tr>
+          <tr><td><code>approvals</code> / <code>patch_runs</code></td><td>승인한 분석·SHA와 패치·검증 결과</td><td>사건당 승인·패치 실행 하나</td></tr>
+          <tr><td><code>jobs</code></td><td>분석·패치 비동기 작업과 임대</td><td>현재 <code>claim_token</code>으로 완료를 제한</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="review">
+      <h2>MVP 계획 검토</h2>
+      <p class="section-intro">검토에서 발견한 설계 공백은 아래처럼 결정했습니다. 이는 문서상의 확정값이며, 코드·계약 시험·실제 실행 환경 검증은 아직 필요합니다. <a href="docs/mvp-implementation-review-2026-09-24.tmp.md">원래 검토 기록 보기 →</a></p>
+      <div class="review-grid">
+        <div class="card finding decided"><span class="tag">확정 · 기준 저장소·SHA</span><h3>접수 시 코드를 고정</h3><p>새 사건에는 접수 당시 저장소 경로를, 새 이벤트에는 배포 SHA 또는 현재 기본 브랜치 <code>HEAD</code>의 전체 커밋 ID를 고정합니다. 중복 이벤트는 Git을 다시 조회하지 않습니다.</p><a href="docs/decisions/0001-event-identity-and-base-sha.md">결정 기록</a></div>
+        <div class="card finding decided"><span class="tag">확정 · 정책</span><h3>분석 조건을 승인까지 유지</h3><p>첫 분석 선점 때 <code>analysis_runs.policy_snapshot</code>에 정책을 고정하고, 승인·패치·검증에 같은 사본을 사용합니다.</p><a href="docs/decisions/0002-frozen-policy-and-execution-network.md">결정 기록</a></div>
+        <div class="card finding decided"><span class="tag">확정 · 외부 통신</span><h3>모델 연결과 실행 명령 분리</h3><p>모델 서비스 연결은 허용하되 Codex가 실행하는 명령과 검증 명령의 외부 접속은 막습니다. 실제 격리 시험에 통과해야 준비 완료로 표시합니다.</p><a href="docs/decisions/0002-frozen-policy-and-execution-network.md">결정 기록</a></div>
+        <div class="card finding decided"><span class="tag">확정 · 입력과 식별자</span><h3>첫 이벤트만 분석</h3><p>내부 ID는 UUIDv4, 지문은 필수입니다. 같은 서비스·지문·전체 SHA만 묶고, 추가 발생은 분석 입력이나 상태 <code>version</code>을 바꾸지 않습니다.</p><a href="docs/decision-register.md">의사결정 대장</a></div>
+        <div class="card finding decided"><span class="tag">확정 · 재현 입력</span><h3>입력 제한 고정</h3><p>요청 256 KiB, 재현 데이터 깊이 8·값 1,000개·문자열 4,096자로 제한합니다. 깊이·총 값 수는 스키마 외에 서버에서도 검사해야 합니다.</p><a href="schemas/external-error-event-v1.schema.json">이벤트 스키마</a></div>
+        <div class="card finding"><span class="tag">남은 일 · 구현 검증</span><h3>결정과 동작은 다릅니다</h3><p>마이그레이션, 계약 시험, 실제 SDK 수명 주기와 명령 통신 차단은 구현 뒤 시험해야 합니다. 현재 저장소는 설계 문서 단계입니다.</p><a href="docs/mvp-execution-plan.md">Phase별 할 일</a></div>
+      </div>
+    </section>
+
+    <section id="phases">
+      <h2>구현 순서</h2>
+      <p class="section-intro">현재 <a href="docs/mvp-execution-plan.md">MVP 실행 계획</a>의 단계별 할 일을 압축한 안내입니다. Phase 0은 문서 기준만 확정됐고, Phase 1~6의 코드와 시험은 아직 완료되지 않았습니다.</p>
+      <div class="phase-list">
+        <div class="phase"><b>Phase 0</b><p>문서 기준 확정 · 완료</p></div><div class="phase"><b>Phase 1</b><p>기반 코드·DB·가짜 어댑터 · 다음 단계</p></div><div class="phase"><b>Phase 2</b><p>오류 접수·사건·작업</p></div><div class="phase"><b>Phase 3</b><p>작업자 임대·가짜 분석</p></div><div class="phase"><b>Phase 4</b><p>읽기 전용 Codex 분석</p></div><div class="phase"><b>Phase 5</b><p>승인·패치·변경 내역 검증</p></div><div class="phase"><b>Phase 6</b><p>장애 상황·종단 간 시험</p></div>
+      </div>
+    </section>
+  </main>
+  <footer><div class="wrap">출처: <a href="docs/decision-register.md">확정 결정</a> · <a href="openapi/auto-error-handler-mvp.v1.yaml">OpenAPI</a> · <a href="schemas/external-error-event-v1.schema.json">이벤트 스키마</a> · <a href="docs/implementation-contracts.md">구현 계약</a> · <a href="docs/service-architecture.md">서비스 구조</a> · <a href="docs/mvp-execution-plan.md">실행 계획</a>. 다이어그램은 현재 문서의 목표 구조이며 실행 코드의 동작을 나타내지 않습니다.</div></footer>
+  <script type="module">
+    const h = window.React?.createElement;
+    const source = (path, line) => ({ path, line, href: path });
+    const NODES = {
+      producer: { title:'오류 발생 서비스', description:'사전 등록된 서비스가 오류와 비식별 재현 입력을 HTTP로 보냅니다. 처리 상태는 이 서비스가 아니라 Auto Error Handler가 관리합니다.', files:[source('docs/contracts/external-error-event-v1.md',15),source('schemas/external-error-event-v1.schema.json',1)], code:'POST /v1/error-events\nContent-Type: application/json\nIdempotency-Key: bf2e277e-7640-4bb2-947a-a4f639f1ec44', lang:'http' },
+      ingress: { title:'오류 접수 API', description:'요청 크기·스키마·멱등성 키를 확인합니다. 새 이벤트라면 Git에서 전체 기준 SHA를 먼저 확정하고, 새 사건이면 접수 당시 저장소 경로·이벤트·발생 기록·분석 작업을 함께 저장합니다.', files:[source('openapi/auto-error-handler-mvp.v1.yaml',12),source('docs/service-architecture.md',164)], code:'  /v1/error-events:\n    post:\n      operationId: ingestErrorEvent\n      summary: 오류 이벤트 접수', lang:'yaml' },
+      database: { title:'PostgreSQL 기준 정보', description:'사건·실행·승인·작업 상태를 보관하는 단일 기준 정보입니다. 사건은 서비스·지문·전체 SHA로 묶고, 접수 당시 저장소 경로·첫 이벤트와 분석 정책을 고정합니다.', files:[source('docs/implementation-contracts.md',50),source('docs/implementation-contracts.md',78)], code:'CREATE UNIQUE INDEX uq_incidents_open_grouping\nON incidents (service_id, fingerprint, base_commit_sha)\nWHERE state IN (\'RECEIVED\', \'ANALYZING\', \'AWAITING_APPROVAL\', \'PATCHING\', \'VALIDATING\');', lang:'sql' },
+      worker: { title:'작업자와 임대', description:'작업자가 PostgreSQL의 대기 작업을 선점하고 분석 또는 패치를 실행합니다. 선점마다 새 claim_token을 발급해 이전 작업자의 결과 저장을 막습니다.', files:[source('docs/service-architecture.md',185),source('docs/implementation-contracts.md',220)], code:'ORDER BY available_at, created_at, id\nFOR UPDATE SKIP LOCKED\nLIMIT 1;', lang:'sql' },
+      analysis: { title:'읽기 전용 분석', description:'사건의 첫 이벤트와 고정된 정책을 사용합니다. 기준 SHA의 분리된 작업 트리에서 Codex가 원인과 변경 제안을 만들고, 결과 형식을 검사해 저장합니다.', files:[source('docs/implementation-contracts.md',262),source('docs/service-architecture.md',195)], code:'class CodexGateway(Protocol):\n    async def analyze(self, request: AnalysisRequest) -> AnalysisResult: ...\n    async def create_patch(self, request: PatchRequest) -> PatchResult: ...', lang:'python' },
+      review: { title:'분석 결과 조회', description:'사용자가 사건 상태와 분석 결과를 확인합니다. 현재 MVP 계획은 웹 화면 대신 HTTP 조회 API를 제공합니다.', files:[source('openapi/auto-error-handler-mvp.v1.yaml',72),source('docs/mvp-scope.md',26)], code:'  /v1/incidents/{incidentId}/analysis:\n    get:\n      operationId: getIncidentAnalysis\n      summary: 최신 분석 결과 조회', lang:'yaml' },
+      approval: { title:'명시적 승인', description:'서버가 사건을 잠그고 유일하게 성공한 분석과 기준 SHA를 확인합니다. 승인·패치 실행·PATCH 작업을 한 트랜잭션에서 저장합니다.', files:[source('openapi/auto-error-handler-mvp.v1.yaml',88),source('docs/implementation-contracts.md',137)], code:'  /v1/incidents/{incidentId}/approve:\n    post:\n      operationId: approveIncidentPatch\n      x-decision-id: DEC-007', lang:'yaml' },
+      patch: { title:'격리된 패치', description:'승인된 SHA와 정책 고정 사본으로 새 쓰기 가능 작업 트리와 Codex 대화를 만듭니다. 분석 단계의 작업 트리와 대화는 재사용하지 않습니다.', files:[source('docs/service-architecture.md',226),source('docs/implementation-contracts.md',297)], code:'| 분석 | 새 스레드 | `read_only` | 금지 |\n| 패치 | 분석과 다른 새 스레드 | `workspace_write` | 해당 작업 트리만 |', lang:'markdown' },
+      validation: { title:'변경 내역·명령 검증', description:'실제 Git 변경 내역이 경로·파일 종류·변경량 정책을 만족하는지 검사합니다. 통과한 뒤에만 등록된 인자 배열의 명령을 실행합니다.', files:[source('docs/implementation-plan.md',371),source('docs/implementation-plan.md',386)], code:'    command.argv,\n    cwd=worktree,\n    shell=False,\n    timeout=command.timeout_seconds,', lang:'python' },
+      result: { title:'검증된 결과 조회', description:'변경 파일, Git 변경 내역, 검증 결과와 실패 상태를 API에서 조회합니다. 성공 상태는 PATCH_READY이며 원격 저장소 전송은 MVP 범위 밖입니다.', files:[source('openapi/auto-error-handler-mvp.v1.yaml',113),source('docs/mvp-scope.md',30)], code:'  /v1/incidents/{incidentId}/patch:\n    get:\n      operationId: getIncidentPatch\n      summary: 최신 패치와 검증 결과 조회', lang:'yaml' }
+    };
+    const DIAGRAM = `flowchart LR
+      subgraph receive["1 · 오류 접수와 저장"]
+        direction TB
+        producer["오류 발생 서비스"]:::external -->|"HTTP 전송"| ingress["접수 API"]:::component -->|"원자적 저장"| database[("PostgreSQL · 사건과 작업")]:::data
+      end
+      subgraph inspect["2 · 읽기 전용 분석"]
+        direction TB
+        worker["작업자 · 임대"]:::utility -->|"작업 실행"| analysis["읽기 전용 분석"]:::external -->|"결과 제공"| review["분석 결과 조회"]:::event
+      end
+      subgraph change["3 · 승인 후 패치와 결과"]
+        direction TB
+        approval["명시적 승인"]:::component ==>|"승인 후 시작"| patch["격리된 패치"]:::utility -->|"실제 변경 확인"| validation["변경 내역 · 명령 검증"]:::utility -->|"결과 제공"| result["결과 조회"]:::component
+      end
+      receive -->|"분석 작업 선점"| inspect
+      inspect -->|"사람이 확인·승인"| change
+      classDef component fill:#7036ab,stroke:#c596fa,color:#fff
+      classDef utility fill:#4f287b,stroke:#b985f0,color:#fff
+      classDef external fill:#45404c,stroke:#98909f,color:#fff
+      classDef event fill:#d6b3f3,stroke:#edceff,color:#171020
+      classDef data fill:#994dd2,stroke:#db9fff,color:#fff
+      click producer nodeClickHandler "계약 보기"
+      click ingress nodeClickHandler "계약 보기"
+      click database nodeClickHandler "계약 보기"
+      click worker nodeClickHandler "계약 보기"
+      click analysis nodeClickHandler "계약 보기"
+      click review nodeClickHandler "계약 보기"
+      click approval nodeClickHandler "계약 보기"
+      click patch nodeClickHandler "계약 보기"
+      click validation nodeClickHandler "계약 보기"
+      click result nodeClickHandler "계약 보기"`;
+    const STATE = `stateDiagram-v2
+      [*] --> RECEIVED
+      RECEIVED --> ANALYZING
+      ANALYZING --> AWAITING_APPROVAL
+      ANALYZING --> ANALYSIS_FAILED
+      AWAITING_APPROVAL --> PATCHING: 승인
+      PATCHING --> VALIDATING
+      PATCHING --> PATCH_FAILED
+      VALIDATING --> PATCH_READY
+      VALIDATING --> PATCH_FAILED`;
+    let highlighter = null;
+    try {
+      const shiki = await import('https://cdn.jsdelivr.net/npm/shiki@3.22.0/+esm');
+      highlighter = await shiki.createHighlighter({ themes:['vitesse-dark'], langs:[...new Set(Object.values(NODES).map(n => n.lang))] });
+    } catch (error) { console.warn('코드 색상 표시를 불러오지 못했습니다.', error); }
+    const HIGHLIGHTED = {};
+    if (highlighter) for (const [id,node] of Object.entries(NODES)) {
+      try { HIGHLIGHTED[id] = highlighter.codeToHtml(node.code,{ lang:node.lang, theme:'vitesse-dark' }); }
+      catch (error) { console.warn('코드 색상 표시 실패:',id,error); }
+    }
+    window.mermaid?.initialize({ startOnLoad:false, securityLevel:'loose', theme:'dark', themeVariables:{ primaryColor:'#171020',primaryTextColor:'#ffffff',primaryBorderColor:'#8154ae',lineColor:'#b7a1c7',background:'#000000',secondaryColor:'#110a18',tertiaryColor:'#110a18',clusterBkg:'#0f0a14',clusterBorder:'#6c408f',edgeLabelBackground:'#100a15' }, flowchart:{ useMaxWidth:false,htmlLabels:true,curve:'basis' } });
+    function App() {
+      const [active,setActive] = React.useState(null);
+      const [error,setError] = React.useState('');
+      const [scale,setScale] = React.useState(1);
+      const viewport = React.useRef(null), canvas = React.useRef(null), diagram = React.useRef(null);
+      const pos = React.useRef({ x:0,y:0,s:1 });
+      const drag = React.useRef(null);
+      const apply = React.useCallback(() => { if (canvas.current) canvas.current.style.transform = `translate(${pos.current.x}px,${pos.current.y}px) scale(${pos.current.s})`; setScale(pos.current.s); },[]);
+      const fit = React.useCallback(() => {
+        const svg = diagram.current?.querySelector('svg'), vp=viewport.current;
+        if (!svg||!vp) return;
+        const size=svg.getBBox(), w=Math.max(1,size.width+90), hgt=Math.max(1,size.height+90);
+        pos.current.s=Math.max(.25,Math.min(1.5,Math.min((vp.clientWidth-30)/w,(vp.clientHeight-30)/hgt)));
+        pos.current.x=(vp.clientWidth-w*pos.current.s)/2; pos.current.y=(vp.clientHeight-hgt*pos.current.s)/2; apply();
+      },[apply]);
+      const zoom = React.useCallback((factor) => { pos.current.s=Math.max(.2,Math.min(3,pos.current.s*factor)); apply(); },[apply]);
+      React.useEffect(() => {
+        window.nodeClickHandler = id => setActive(id);
+        if (!window.mermaid) { setError('다이어그램 라이브러리를 불러오지 못했습니다. 아래의 구조 설명과 검토 내용을 볼 수 있습니다.'); return; }
+        window.mermaid.render('mvp-architecture-diagram',DIAGRAM).then(({svg,bindFunctions}) => {
+          if (!diagram.current) return;
+          diagram.current.innerHTML=svg;
+          bindFunctions?.(diagram.current);
+          requestAnimationFrame(fit);
+        }).catch(e => { console.error(e); setError('다이어그램을 표시하지 못했습니다. 아래의 구조 설명과 검토 내용을 볼 수 있습니다.'); });
+        return () => { delete window.nodeClickHandler; };
+      },[fit]);
+      React.useEffect(() => {
+        const vp=viewport.current; if (!vp) return;
+        const onWheel=e => { e.preventDefault(); const r=vp.getBoundingClientRect(), x=e.clientX-r.left,y=e.clientY-r.top, before=pos.current.s, next=Math.max(.2,Math.min(3,before*(e.deltaY<0?1.12:1/1.12))), ratio=next/before; pos.current.x=x-ratio*(x-pos.current.x);pos.current.y=y-ratio*(y-pos.current.y);pos.current.s=next;apply(); };
+        const onDown=e => { if(e.target.closest('.node')) return; drag.current={x:e.clientX,y:e.clientY};vp.classList.add('dragging');vp.setPointerCapture(e.pointerId); };
+        const onMove=e => { if(!drag.current)return;pos.current.x+=e.clientX-drag.current.x;pos.current.y+=e.clientY-drag.current.y;drag.current={x:e.clientX,y:e.clientY};apply(); };
+        const onUp=() => { drag.current=null;vp.classList.remove('dragging'); };
+        vp.addEventListener('wheel',onWheel,{passive:false});vp.addEventListener('pointerdown',onDown);vp.addEventListener('pointermove',onMove);vp.addEventListener('pointerup',onUp);vp.addEventListener('pointercancel',onUp);
+        window.addEventListener('resize',fit);
+        return () => {vp.removeEventListener('wheel',onWheel);vp.removeEventListener('pointerdown',onDown);vp.removeEventListener('pointermove',onMove);vp.removeEventListener('pointerup',onUp);vp.removeEventListener('pointercancel',onUp);window.removeEventListener('resize',fit);};
+      },[apply,fit]);
+      React.useEffect(() => { const onKey=e => { if(e.key==='Escape')setActive(null); }; document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey); },[]);
+      const node=active?NODES[active]:null;
+      return h(React.Fragment,null,
+        h('div',{className:'diagram-shell'},
+          h('div',{className:'diagram-header'},h('span',null,'각 요소를 눌러 계약과 출처 보기 · 마우스 휠로 확대 · 빈 공간 드래그로 이동'),h('div',{className:'controls'},h('button',{type:'button',onClick:()=>zoom(1.25),'aria-label':'확대'},'+'),h('button',{type:'button',onClick:()=>zoom(.8),'aria-label':'축소'},'−'),h('button',{type:'button',onClick:fit},'맞춤'),h('span',null,Math.round(scale*100)+'%'))),
+          h('div',{className:'viewport',ref:viewport},h('div',{className:'diagram-canvas',ref:canvas},h('div',{ref:diagram,className:'mermaid-wrap'},error?h('div',{className:'diagram-fallback'},error):null))),
+          h('div',{className:'legend'},h('span',null,h('i',{className:'dot',style:{background:'#45404c'}}),'외부 주체·실행 환경'),h('span',null,h('i',{className:'dot',style:{background:'#7036ab'}}),'서비스 처리'),h('span',null,h('i',{className:'dot',style:{background:'#994dd2'}}),'지속 상태'))
+        ),
+        node?h('aside',{className:'detail',role:'dialog','aria-label':node.title},
+          h('div',{className:'detail-head'},h('h3',null,node.title),h('button',{type:'button',className:'detail-close',onClick:()=>setActive(null),'aria-label':'상세 닫기'},'×')),
+          h('p',null,node.description),
+          HIGHLIGHTED[active]?h('div',{dangerouslySetInnerHTML:{__html:HIGHLIGHTED[active]}}):h('pre',null,h('code',null,node.code)),
+          h('div',{className:'source-list'},h('strong',null,'근거 문서'),...node.files.map((f,i)=>h('a',{key:i,href:f.href},f.path+(f.line?':'+f.line:''))))
+        ):null
+      );
+    }
+    if (h&&window.ReactDOM) window.ReactDOM.createRoot(document.getElementById('architecture-app')).render(h(App));
+    else document.getElementById('architecture-app').textContent='화면 구성 요소를 불러오지 못했습니다. 아래의 구조 설명과 검토 내용을 볼 수 있습니다.';
+    if (window.mermaid) window.mermaid.render('mvp-state-diagram',STATE).then(({svg})=>{ document.getElementById('state-diagram').innerHTML=svg; }).catch(e=>console.warn('상태 다이어그램 표시 실패',e));
+  </script>
+</body>
+</html>

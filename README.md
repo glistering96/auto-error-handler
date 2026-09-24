@@ -2,6 +2,8 @@
 
 오류 이벤트를 HTTP API로 받아 등록된 저장소를 Codex로 분석하고, 사용자가 승인한 경우에만 격리된 worktree에서 패치를 생성·검증하는 MVP입니다.
 
+현재는 **MVP 설계·계약 문서가 확정된 상태**입니다. 서비스 코드·데이터베이스 마이그레이션·자동화 시험은 아직 없으며, [실행 계획의 Phase 1](docs/mvp-execution-plan.md)부터 구현할 수 있습니다.
+
 현재 목표는 운영 기능을 넓게 구현하는 것이 아니라 아래 단일 흐름이 실제로 동작함을 증명하는 것입니다.
 
 ```text
@@ -18,7 +20,7 @@ HTTP 오류 이벤트 수신
 ## MVP 원칙
 
 - 외부 서비스는 RabbitMQ가 아니라 HTTP API로 오류를 전송합니다.
-- 오류 문구와 함께 재현 절차, 비식별 입력, 기대·실제 결과를 선택적으로 전송할 수 있습니다.
+- 오류 문구와 함께 재현 절차와 실제 재현에 필요한 비식별 request input·fixture 데이터를 선택적으로 전송할 수 있습니다.
 - 서비스는 요청 body의 `serviceKey`로 식별합니다. 서비스 인증은 MVP 이후에 추가합니다.
 - Incident와 Job 상태의 진실 공급원은 PostgreSQL입니다.
 - 별도 MQ 없이 PostgreSQL Job Queue로 비동기 작업을 처리합니다.
@@ -29,13 +31,15 @@ HTTP 오류 이벤트 수신
 
 ## 문서
 
-- [통합 웹 문서: 비즈니스 로직·API 계약·Job Queue](auto-error-handler-mvp-guide.html)
+- [MVP 서비스 구조·구현 계획 인터랙티브 웹 문서](walkthrough-mvp-service-architecture.html)
 - [기여 및 PR 규칙](CONTRIBUTING.md)
-- [인터랙티브 서비스 흐름 Walkthrough](walkthrough-auto-error-handler.html)
 - [서비스 아키텍처](docs/service-architecture.md)
+- [MVP 구현 범위](docs/mvp-scope.md)
+- [MVP 실행 계획](docs/mvp-execution-plan.md)
 - [세부 구현 계획](docs/implementation-plan.md)
 - [협업 시작 가이드](docs/collaboration-guide.md)
 - [MVP 의사결정 대장](docs/decision-register.md)
+- [MVP 구현 계획 검토 기록](docs/mvp-implementation-review-2026-09-24.tmp.md)
 - [DB·Worker·Codex 구현 계약](docs/implementation-contracts.md)
 - [HTTP 오류 이벤트 계약 v1](docs/contracts/external-error-event-v1.md)
 - [오류 이벤트 JSON Schema](schemas/external-error-event-v1.schema.json)
