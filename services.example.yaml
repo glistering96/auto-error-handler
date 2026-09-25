@@ -1,0 +1,15 @@
+services:
+  fixture-api:
+    repositoryPath: fixture-api
+    defaultBranch: main
+    runbookPaths: [README.md]
+    allowedPaths: ["src/**", "tests/**"]
+    deniedPaths: [".github/**", "infra/**", ".env*", "**/.env*"]
+    maxChangedFiles: 10
+    maxDiffLines: 400
+    analysisTimeoutSeconds: 86400
+    patchTimeoutSeconds: 900
+    validationCommands:
+      - id: unit
+        argv: [python3, -m, unittest, discover, -s, tests]
+        timeoutSeconds: 300

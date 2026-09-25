@@ -1,0 +1,23 @@
+{
+  "specVersion": "1.0",
+  "eventId": "bf2e277e-7640-4bb2-947a-a4f639f1ec44",
+  "serviceKey": "fixture-api",
+  "environment": "development",
+  "occurredAt": "2026-09-24T12:00:00Z",
+  "severity": "error",
+  "title": "Missing user returns empty response",
+  "message": "Expected 404 for a missing user",
+  "fingerprint": "fixture-api:missing-user:v1",
+  "release": {"version": "fixture-api@1.0.0"},
+  "reproduction": {
+    "description": "Look up the missing fixture user",
+    "steps": ["Call get_user with missing"],
+    "expectedBehavior": "404 response",
+    "actualBehavior": "None is returned",
+    "frequency": "always"
+  },
+  "reproductionData": {
+    "request": {"pathParams": {"userId": "missing"}},
+    "fixtures": [{"name": "user", "data": {"exists": false}}]
+  }
+}

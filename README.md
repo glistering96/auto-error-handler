@@ -2,9 +2,9 @@
 
 오류 이벤트를 HTTP API로 받아 등록된 저장소를 Codex로 분석하고, 사용자가 승인한 경우에만 격리된 worktree에서 패치를 생성·검증하는 MVP입니다.
 
-현재는 **MVP 설계·계약 문서가 확정된 상태**입니다. 서비스 코드·데이터베이스 마이그레이션·자동화 시험은 아직 없으며, [실행 계획의 Phase 1](docs/mvp-execution-plan.md)부터 구현할 수 있습니다.
+현재는 **로컬에서 실행 가능한 MVP**입니다. PostgreSQL 접수·작업 대기열, Codex 분석, 명시적 승인, 격리된 패치와 검증을 구현했습니다. 개발망 전용이며 서비스·승인자 인증은 없습니다.
 
-현재 목표는 운영 기능을 넓게 구현하는 것이 아니라 아래 단일 흐름이 실제로 동작함을 증명하는 것입니다.
+아래 단일 흐름을 실제 Codex SDK와 예제 저장소로 검증했습니다.
 
 ```text
 HTTP 오류 이벤트 수신
@@ -28,6 +28,65 @@ HTTP 오류 이벤트 수신
 - 패치 작업은 명시적인 승인 이후에만 시작합니다.
 - 패치는 기준 commit에서 만든 별도 worktree에서만 수행합니다.
 - MVP 결과물은 검증 결과와 Git diff입니다. GitHub branch·Pull Request 생성은 후속 단계입니다.
+
+## 로컬 실행
+
+Python 3.12, `uv`, Docker Compose, `bwrap`, Git이 필요합니다. 로컬 로그인 방식에는 Codex CLI도 설치해야 합니다. [공식 Codex Python SDK](https://learn.chatgpt.com/docs/codex-sdk)는 잠금 파일에 고정된 CLI 실행 환경을 사용합니다.
+
+```bash
+cp .env.example .env
+uv sync --frozen
+uv run python -m aeh.cli init-fixture
+docker compose up -d postgres
+uv run alembic upgrade head
+uv run python -m aeh.cli sync-services
+```
+
+별도 터미널에서 API와 작업자를 실행합니다.
+
+```bash
+uv run python -m apps.control_api.main
+uv run python -m apps.job_worker.main
+```
+
+`GET /health/live`는 프로세스 상태, `GET /health/ready`는 DB·설정·Codex 실행 도구와 인증 상태를 확인합니다. 준비 상태 점검에서 모델을 호출하지는 않습니다. API는 `127.0.0.1:8000`에만 바인딩합니다.
+
+### Codex 인증 두 가지
+
+- **로컬 로그인:** `.env`의 `CODEX_AUTH_MODE=local`을 사용합니다. 한 번 `codex login`을 마치고 `codex login status`로 확인하면, 작업자가 저장된 CLI 인증을 격리된 임시 Codex 실행 홈에 복사해 사용합니다.
+- **API 키:** `.env`의 `CODEX_AUTH_MODE=api-key`로 바꾸고 작업자 프로세스의 환경에 `OPENAI_API_KEY`를 공급합니다. 작업자는 이를 Codex 호출에 필요한 `CODEX_API_KEY`로 전달합니다. 키 값은 저장소의 설정 파일, 로그, 검증 명령에 기록하지 않습니다. 로컬에 사용 가능한 API 키가 없어 이 경로는 설정 시험까지만 확인했습니다.
+
+두 방식은 [Codex 공식 인증 문서](https://learn.chatgpt.com/docs/auth)의 로컬 로그인·API 키 흐름을 따릅니다. 일반 자동 시험에서 모델 호출을 생략하려면 `.env`에 `USE_FAKE_CODEX=true`를 설정합니다.
+
+### 예제 사건 처리
+
+```bash
+curl -i -X POST http://127.0.0.1:8000/v1/error-events \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: bf2e277e-7640-4bb2-947a-a4f639f1ec44' \
+  --data-binary @fixtures/event.json
+```
+
+응답의 `incidentId`로 `GET /v1/incidents/{incidentId}/analysis`를 조회하고 `AWAITING_APPROVAL`을 확인한 뒤 승인합니다. 승인 요청에는 본문을 넣지 않습니다.
+
+```bash
+curl -i -X POST http://127.0.0.1:8000/v1/incidents/INCIDENT_ID/approve \
+  -H 'Idempotency-Key: NEW_APPROVAL_UUID'
+curl http://127.0.0.1:8000/v1/incidents/INCIDENT_ID/patch
+```
+
+분석과 패치의 임시 Git 작업 트리는 실행 종료 시 삭제됩니다. 기준 저장소는 변경하지 않고, 검증된 diff와 결과를 DB에서 조회합니다.
+
+### 검사
+
+```bash
+uv run ruff check aeh apps tests scripts
+uv run mypy aeh apps
+uv run pytest -q
+uv run python scripts/probe_codex_flow.py
+```
+
+마지막 명령은 실제 모델을 호출하므로 로컬 로그인 또는 API 키가 필요합니다. 일반 `pytest`는 가짜 게이트웨이를 사용합니다. 실행 전 결정과 범위는 [이번 구현 계획](docs/mvp-build-plan-2026-09-24.md)에 기록했습니다.
 
 ## 문서
 

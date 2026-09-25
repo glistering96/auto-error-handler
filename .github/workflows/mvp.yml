@@ -1,0 +1,36 @@
+name: MVP checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: aeh
+          POSTGRES_USER: aeh
+          POSTGRES_PASSWORD: aeh
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aeh -d aeh"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://aeh:aeh@localhost:5432/aeh
+      REPOSITORY_ROOT: /tmp/aeh-repositories
+      USE_FAKE_CODEX: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - run: uv sync --frozen --python 3.12
+      - run: uv run python -m aeh.cli init-fixture
+      - run: uv run alembic upgrade head
+      - run: uv run ruff check aeh apps tests scripts
+      - run: uv run mypy aeh apps
+      - run: uv run pytest -q
