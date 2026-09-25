@@ -211,6 +211,7 @@ tempCodeRunnerFile.py
 
 # Local CodeGraph index
 .codegraph/
+data/
 
 # Marimo
 marimo/_static/

@@ -7,7 +7,7 @@
 
 이 문서는 현재 설계에서 **MVP로 실제 구현할 요소만 추려 정리한 범위 문서**입니다. 세부 필드와 상태가 문서마다 다르면 `ACCEPTED` 결정, OpenAPI·JSON Schema, 마이그레이션, 계약 테스트 순서로 판단합니다.
 
-현재 `HEAD`에는 설계 문서만 있으며 Python 패키지, FastAPI·작업자 진입점, PostgreSQL 마이그레이션, Docker Compose 구성, 테스트는 없습니다. 따라서 이 문서는 구현 완료 보고서가 아니라 구현 범위와 완료 조건을 정의합니다.
+이 문서는 최초 MVP 범위와 완료 조건을 정의한 기록입니다. 현재 구현은 SQLite를 로컬 기본값으로 사용하고 PostgreSQL을 다중 호스트 운영용으로 지원하며, 읽기 전용 리뷰 웹을 포함합니다. 최신 저장소·동시성 결정은 [ADR-0003](decisions/0003-sqlite-local-postgresql-scaleout-and-review.md)을 따릅니다.
 
 ## 1. MVP 한 문장
 

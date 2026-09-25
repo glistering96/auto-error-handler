@@ -2,7 +2,7 @@
 
 오류 이벤트를 HTTP API로 받아 등록된 저장소를 Codex로 분석하고, 사용자가 승인한 경우에만 격리된 worktree에서 패치를 생성·검증하는 MVP입니다.
 
-현재는 **로컬에서 실행 가능한 MVP**입니다. PostgreSQL 접수·작업 대기열, Codex 분석, 명시적 승인, 격리된 패치와 검증을 구현했습니다. 개발망 전용이며 서비스·승인자 인증은 없습니다.
+현재는 **로컬에서 실행 가능한 MVP**입니다. SQLite 기본 저장소와 PostgreSQL 확장 경로, Codex 분석, 명시적 승인, 격리된 패치·검증, 읽기 전용 리뷰 웹을 구현했습니다. 개발망 전용이며 서비스·승인자 인증은 없습니다.
 
 아래 단일 흐름을 실제 Codex SDK와 예제 저장소로 검증했습니다.
 
@@ -22,8 +22,8 @@ HTTP 오류 이벤트 수신
 - 외부 서비스는 RabbitMQ가 아니라 HTTP API로 오류를 전송합니다.
 - 오류 문구와 함께 재현 절차와 실제 재현에 필요한 비식별 request input·fixture 데이터를 선택적으로 전송할 수 있습니다.
 - 서비스는 요청 body의 `serviceKey`로 식별합니다. 서비스 인증은 MVP 이후에 추가합니다.
-- Incident와 Job 상태의 진실 공급원은 PostgreSQL입니다.
-- 별도 MQ 없이 PostgreSQL Job Queue로 비동기 작업을 처리합니다.
+- Incident와 Job 상태는 선택한 DB 한 곳에 저장합니다. 로컬 기본값은 SQLite이며 여러 호스트로 확장할 때 PostgreSQL을 사용합니다.
+- 별도 MQ 없이 DB의 `jobs` 테이블로 비동기 작업을 처리합니다.
 - 분석 단계는 저장소를 변경할 수 없습니다.
 - 패치 작업은 명시적인 승인 이후에만 시작합니다.
 - 패치는 기준 commit에서 만든 별도 worktree에서만 수행합니다.
@@ -31,25 +31,38 @@ HTTP 오류 이벤트 수신
 
 ## 로컬 실행
 
-Python 3.12, `uv`, Docker Compose, `bwrap`, Git이 필요합니다. 로컬 로그인 방식에는 Codex CLI도 설치해야 합니다. [공식 Codex Python SDK](https://learn.chatgpt.com/docs/codex-sdk)는 잠금 파일에 고정된 CLI 실행 환경을 사용합니다.
+Python 3.12, `uv`, `bwrap`, Git이 필요합니다. PostgreSQL을 사용할 때만 Docker Compose가 필요합니다. 로컬 로그인 방식에는 Codex CLI도 설치해야 합니다. [공식 Codex Python SDK](https://learn.chatgpt.com/docs/codex-sdk)는 잠금 파일에 고정된 CLI 실행 환경을 사용합니다.
 
 ```bash
 cp .env.example .env
 uv sync --frozen
 uv run python -m aeh.cli init-fixture
-docker compose up -d postgres
 uv run alembic upgrade head
 uv run python -m aeh.cli sync-services
 ```
 
-별도 터미널에서 API와 작업자를 실행합니다.
+각각 별도 터미널에서 Control API, 작업자, 리뷰 웹을 실행합니다. 세 프로세스의 `DATABASE_URL`은 같아야 합니다.
 
 ```bash
 uv run python -m apps.control_api.main
 uv run python -m apps.job_worker.main
+uv run python -m apps.review_web.main
 ```
 
-`GET /health/live`는 프로세스 상태, `GET /health/ready`는 DB·설정·Codex 실행 도구와 인증 상태를 확인합니다. 준비 상태 점검에서 모델을 호출하지는 않습니다. API는 `127.0.0.1:8000`에만 바인딩합니다.
+리뷰 웹은 `http://127.0.0.1:8001/review/incidents`에서 사건 목록과 접수 이벤트, 분석 근거, 승인, 패치 diff, 검증 결과를 읽기 전용으로 보여줍니다. `GET /health/live`는 프로세스 상태, `GET /health/ready`는 DB·설정·Codex 실행 도구와 인증 상태를 확인합니다. 준비 상태 점검에서 모델을 호출하지는 않습니다. 두 웹 프로세스는 루프백 주소에만 바인딩합니다.
+
+### PostgreSQL로 확장
+
+SQLite는 WAL로 읽기와 쓰기를 함께 처리하지만 쓰기는 한 번에 하나이며 파일을 같은 호스트에 둬야 합니다. 여러 API·작업자를 여러 호스트에서 실행하려면 PostgreSQL을 사용합니다. 모든 인스턴스에 같은 `DATABASE_URL`과 서비스 설정을 제공하고, `REPOSITORY_ROOT` 아래에 같은 기준 커밋을 가진 저장소를 준비합니다. 저장소 루트의 절대 경로는 인스턴스마다 달라도 됩니다.
+
+```bash
+docker compose up -d postgres
+export DATABASE_URL=postgresql+psycopg://aeh:aeh@localhost:5432/aeh
+uv run alembic upgrade head
+uv run python -m aeh.cli sync-services
+```
+
+서비스 설정 등록은 운영 명령 한 곳에서 실행합니다. API 인스턴스가 시작할 때 설정을 다시 쓰지 않습니다.
 
 ### Codex 인증 두 가지
 
@@ -80,13 +93,14 @@ curl http://127.0.0.1:8000/v1/incidents/INCIDENT_ID/patch
 ### 검사
 
 ```bash
-uv run ruff check aeh apps tests scripts
+uv run ruff check aeh apps tests scripts migrations
 uv run mypy aeh apps
 uv run pytest -q
+TEST_POSTGRES_URL=postgresql+psycopg://aeh:aeh@localhost:5432/aeh uv run pytest -q
 uv run python scripts/probe_codex_flow.py
 ```
 
-마지막 명령은 실제 모델을 호출하므로 로컬 로그인 또는 API 키가 필요합니다. 일반 `pytest`는 가짜 게이트웨이를 사용합니다. 실행 전 결정과 범위는 [이번 구현 계획](docs/mvp-build-plan-2026-09-24.md)에 기록했습니다.
+PostgreSQL 시험에는 실행 중인 PostgreSQL이 필요합니다. 마지막 명령은 실제 모델을 호출하므로 로컬 로그인 또는 API 키가 필요합니다. 일반 `pytest`는 가짜 게이트웨이를 사용합니다. 실행 전 결정과 범위는 [기본 MVP 계획](docs/mvp-build-plan-2026-09-24.md)과 [리뷰·DB 확장 계획](docs/review-web-sqlite-scaleout-plan-2026-09-25.md)에 기록했습니다.
 
 ## 문서
 
@@ -98,6 +112,7 @@ uv run python scripts/probe_codex_flow.py
 - [세부 구현 계획](docs/implementation-plan.md)
 - [협업 시작 가이드](docs/collaboration-guide.md)
 - [MVP 의사결정 대장](docs/decision-register.md)
+- [SQLite·PostgreSQL·리뷰 웹 결정](docs/decisions/0003-sqlite-local-postgresql-scaleout-and-review.md)
 - [MVP 구현 계획 검토 기록](docs/mvp-implementation-review-2026-09-24.tmp.md)
 - [DB·Worker·Codex 구현 계약](docs/implementation-contracts.md)
 - [HTTP 오류 이벤트 계약 v1](docs/contracts/external-error-event-v1.md)

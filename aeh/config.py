@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import socket
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -75,6 +78,9 @@ class ServicePolicy(BaseModel):
 
     @model_validator(mode="after")
     def validate_paths(self) -> ServicePolicy:
+        repository = Path(self.repository_path)
+        if repository.is_absolute() or ".." in repository.parts or not self.repository_path:
+            raise ValueError("repositoryPath must be relative to REPOSITORY_ROOT")
         for pattern in self.allowed_paths + self.denied_paths + self.runbook_paths:
             if (
                 not pattern
@@ -88,7 +94,7 @@ class ServicePolicy(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    database_url: str = "postgresql+psycopg://aeh:aeh@localhost:5432/aeh"
+    database_url: str = "sqlite+pysqlite:///./data/auto-error-handler.db"
     service_config_path: Path = Path("services.example.yaml")
     repository_root: Path = Path("/tmp/aeh-repositories")
     workspace_root: Path = Path("/tmp/aeh-workspaces")
@@ -96,7 +102,9 @@ class Settings(BaseSettings):
     codex_bin: str | None = None
     codex_auth_mode: Literal["local", "api-key"] = "local"
     use_fake_codex: bool = False
-    worker_id: str = "local-worker"
+    worker_id: str = Field(
+        default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    )
     worker_concurrency: int = Field(default=1, ge=1, le=8)
     worker_poll_seconds: float = Field(default=1.0, ge=0.1)
     cursor_secret: str = "local-dev-cursor-secret"
@@ -108,8 +116,11 @@ class Settings(BaseSettings):
         return {key: ServicePolicy.model_validate(value) for key, value in raw["services"].items()}
 
     def repository_path(self, policy: ServicePolicy) -> Path:
+        return self.resolve_repository_reference(policy.repository_path)
+
+    def resolve_repository_reference(self, reference: str) -> Path:
         root = self.repository_root.resolve(strict=True)
-        path = (root / policy.repository_path).resolve(strict=True)
+        path = (root / reference).resolve(strict=True)
         if path != root and root not in path.parents:
             raise ValueError("repository is outside REPOSITORY_ROOT")
         if not (path / ".git").exists():

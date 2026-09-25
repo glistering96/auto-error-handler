@@ -1,7 +1,7 @@
 # MVP 의사결정 대장
 
 상태: MVP 주요 결정 확정
-최종 갱신: 2026-09-24
+최종 갱신: 2026-09-25
 
 이 문서는 MVP 구현 결정을 한곳에서 관리합니다. 상세 설계보다 이 문서의 `ACCEPTED` 결정이 우선하며, 아직 코드로 구현됐다는 뜻은 아닙니다.
 
@@ -37,7 +37,7 @@
 |---|---:|---|---|---|---|
 | DEC-001 | P0 | ACCEPTED | 외부 ingress | Producer는 HTTP `POST /v1/error-events` 사용 | 완료 |
 | DEC-002 | P0 | DEFERRED | 인증 | 서비스·승인자 인증은 제외하고 개발망에만 노출 | MVP 이후 |
-| DEC-003 | P0 | ACCEPTED | 비동기 전달 | PostgreSQL `jobs`가 Source of Truth이자 Queue | 완료 |
+| DEC-003 | P0 | ACCEPTED | 비동기 전달 | 선택한 DB의 `jobs`가 Source of Truth이자 Queue. 로컬 기본값 SQLite, 다중 호스트는 PostgreSQL | 완료 |
 | DEC-004 | P0 | ACCEPTED | 내부 ID | 모든 내부 리소스 ID는 UUIDv4. 외부 `eventId`와 승인 멱등성 키는 유효한 UUID | 완료 |
 | DEC-005 | P0 | ACCEPTED | 사건 묶기 | Producer `fingerprint` 필수. `(service_id, fingerprint, base_commit_sha)`가 같은 처리 중 사건만 묶음 | 완료 |
 | DEC-006 | P0 | ACCEPTED | 기준 저장소·커밋 | 새 사건 접수 때 저장소 경로를 고정하고, 새 이벤트의 제공된 SHA 또는 당시 기본 브랜치 `HEAD`를 전체 커밋 SHA로 검증·고정 | 완료 |
@@ -60,8 +60,9 @@
 | DEC-023 | P0 | ACCEPTED | 외부 통신 경계 | Codex 모델 연결은 허용, 모델 실행 명령과 검증 명령의 외부 접속은 차단 | 완료 |
 | DEC-024 | P1 | ACCEPTED | 분석 입력과 사건 버전 | 첫 이벤트 하나를 분석 입력으로 고정, 추가 발생 기록은 `version`을 올리지 않음 | 완료 |
 | DEC-025 | P0 | ACCEPTED | 이벤트 체크섬 | RFC 8785로 정규화한 요청 JSON의 UTF-8 바이트에 SHA-256 적용. 중복 키는 `400`, 정규화 불가 수치는 `422` | 완료 |
+| DEC-026 | P1 | ACCEPTED | 리뷰와 저장소 이식성 | 별도 읽기 전용 웹, 상대 저장소 경로, SQLite WAL·PostgreSQL 이중 지원 | 완료 |
 
-`DEC-004/005/006/024/025`의 근거와 호환성 변경은 [ADR-0001](decisions/0001-event-identity-and-base-sha.md), `DEC-013/022/023`의 실행 경계는 [ADR-0002](decisions/0002-frozen-policy-and-execution-network.md)에 기록합니다.
+`DEC-004/005/006/024/025`의 근거와 호환성 변경은 [ADR-0001](decisions/0001-event-identity-and-base-sha.md), `DEC-013/022/023`의 실행 경계는 [ADR-0002](decisions/0002-frozen-policy-and-execution-network.md), `DEC-003/012/019/026`의 저장소·리뷰 변경은 [ADR-0003](decisions/0003-sqlite-local-postgresql-scaleout-and-review.md)에 기록합니다.
 
 ## 확정된 구현 값
 
@@ -70,7 +71,7 @@
 - `reproductionData`는 해당 값 자체를 깊이 0으로 셌을 때 최대 깊이 8, 전체 JSON 값 1,000개, 개별 문자열 4,096자다. 초과하면 `422`다.
 - 변경 파일은 최대 10개, 추가·삭제한 줄의 합은 최대 400줄이다. 패치 실행은 최대 900초, 등록된 검증 명령은 각각 최대 300초다.
 - 저장할 분석 결과는 직렬화한 UTF-8 기준 최대 128 KiB, 변경 내역은 최대 512 KiB, 명령별 표준 출력과 표준 오류는 각각 최대 32 KiB, 오류 상세 내용은 최대 2 KiB다. 초과한 성공 후보는 성공으로 저장하지 않고 제한 위반으로 처리하며, 로그·오류 설명은 저장 전에 민감 정보를 제거하고 제한 길이로 줄인다.
-- 첫 MVP의 작업자 동시 실행은 기본 1이다. `PENDING`과 `RUNNING`을 합친 미완료 작업이 100개면 새 사건을 만드는 요청은 이벤트를 저장하지 않고 `503`을 반환한다. 중복 이벤트 재요청은 이 제한과 무관하게 기존 사건 ID와 현재 상태를 돌려준다. 상한 검사는 접수 트랜잭션에서 고정된 PostgreSQL 자문 잠금을 잡은 뒤 미완료 작업 수를 세어 동시 접수에도 100개를 넘지 않게 한다.
+- 작업자 동시 실행은 기본 1이다. `PENDING`과 `RUNNING`을 합친 미완료 작업이 100개면 새 사건을 만드는 요청은 이벤트를 저장하지 않고 `503`을 반환한다. 중복 이벤트 재요청은 이 제한과 무관하게 기존 사건 ID와 현재 상태를 돌려준다. 상한 검사는 PostgreSQL에서 고정 자문 잠금, SQLite에서 즉시 시작하는 쓰기 트랜잭션 안에서 수행한다.
 - 서비스별 정책은 위 전체 제한보다 엄격해질 수 있지만 완화할 수는 없다. 분석이 시작할 때 실제 적용할 값을 정책 고정 사본에 저장한다.
 
 ## 결정별 검증 기준

@@ -4,15 +4,14 @@ import base64
 import hmac
 import uuid
 from datetime import datetime
-from pathlib import Path
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from aeh.config import Limits, Settings
 from aeh.contracts import utc
 from aeh.db import (
-    OPEN_STATES,
     AnalysisRun,
     Approval,
     ErrorEvent,
@@ -21,17 +20,21 @@ from aeh.db import (
     Occurrence,
     PatchRun,
     Service,
+    write_transaction,
 )
 from aeh.errors import AehError
 from aeh.gitops import resolve_commit
+from aeh.repository import IncidentRepository, ReviewRepository
 
 
 def sync_services(settings: Settings, factory: sessionmaker) -> None:
     policies = settings.load_services()
-    with factory.begin() as db:
+    with write_transaction(factory) as db:
+        repository = IncidentRepository(db)
         for key, policy in policies.items():
-            path = str(settings.repository_path(policy))
-            row = db.scalar(select(Service).where(Service.key == key).with_for_update())
+            path = policy.repository_path
+            settings.repository_path(policy)
+            row = repository.service_by_key(key, lock=True)
             if row is None:
                 db.add(
                     Service(
@@ -42,11 +45,10 @@ def sync_services(settings: Settings, factory: sessionmaker) -> None:
                     )
                 )
             else:
-                if row.repository_path != path and db.scalar(
-                    select(Incident.id)
-                    .where(Incident.service_id == row.id, Incident.state.in_(OPEN_STATES))
-                    .limit(1)
-                ):
+                moved = settings.resolve_repository_reference(
+                    row.repository_path
+                ) != settings.resolve_repository_reference(path)
+                if moved and repository.has_open_incident(row.id):
                     raise ValueError(
                         f"Service {key} has active incidents; repository path cannot change"
                     )
@@ -59,20 +61,13 @@ def sync_services(settings: Settings, factory: sessionmaker) -> None:
 def _duplicate(
     db: Session, service_id: uuid.UUID, event_id: uuid.UUID, checksum: str
 ) -> dict | None:
-    row = db.scalar(
-        select(ErrorEvent).where(
-            ErrorEvent.service_id == service_id, ErrorEvent.event_id == event_id
-        )
-    )
+    repository = IncidentRepository(db)
+    row = repository.event_by_identity(service_id, event_id)
     if row is None:
         return None
     if row.payload_checksum != checksum:
         raise AehError(409, "AEH-EVENT-409-001", "eventId was already used with another payload")
-    incident = db.scalar(
-        select(Incident)
-        .join(Occurrence, Occurrence.incident_id == Incident.id)
-        .where(Occurrence.error_event_id == row.id)
-    )
+    incident = repository.incident_for_event(row.id)
     if incident is None:
         raise AehError(500, "AEH-INTERNAL-500-001", "Event has no incident")
     return {
@@ -83,23 +78,55 @@ def _duplicate(
     }
 
 
+def _require_job_capacity(db: Session, repository: IncidentRepository) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(394771029)"))
+    if repository.active_job_count() >= Limits.job_limit:
+        raise AehError(503, "AEH-JOB-503-001", "Pending job limit reached")
+
+
 def ingest(
     settings: Settings, factory: sessionmaker, event: dict, checksum: str, normalized: dict
 ) -> dict:
     event_id = uuid.UUID(event["eventId"])
     with factory() as db:
-        service = db.scalar(
-            select(Service).where(Service.key == event["serviceKey"], Service.active.is_(True))
-        )
+        service = IncidentRepository(db).service_by_key(event["serviceKey"], active=True)
         if service is None:
             raise AehError(404, "AEH-EVENT-404-001", "Unknown serviceKey")
         duplicate = _duplicate(db, service.id, event_id, checksum)
         if duplicate:
             return duplicate
         service_id, repo_path, branch = service.id, service.repository_path, service.default_branch
-    sha = resolve_commit(Path(repo_path), event.get("release", {}).get("commitSha"), branch)
-    with factory.begin() as db:
-        service = db.scalar(select(Service).where(Service.id == service_id).with_for_update())
+    sha = resolve_commit(
+        settings.resolve_repository_reference(repo_path),
+        event.get("release", {}).get("commitSha"),
+        branch,
+    )
+    for _ in range(3):
+        try:
+            return _ingest_resolved(
+                factory, service_id, repo_path, event, event_id, checksum, normalized, sha
+            )
+        except IntegrityError as exc:
+            sqlstate = getattr(exc.orig, "sqlstate", None)
+            if sqlstate != "23505" and "UNIQUE constraint failed" not in str(exc.orig):
+                raise
+    raise AehError(503, "AEH-JOB-503-001", "Concurrent event receipt did not settle; retry")
+
+
+def _ingest_resolved(
+    factory: sessionmaker,
+    service_id: uuid.UUID,
+    repo_path: str,
+    event: dict,
+    event_id: uuid.UUID,
+    checksum: str,
+    normalized: dict,
+    sha: str,
+) -> dict:
+    with write_transaction(factory) as db:
+        repository = IncidentRepository(db)
+        service = repository.service_by_id(service_id, read_lock=True)
         if service is None or not service.active:
             raise AehError(404, "AEH-EVENT-404-001", "Unknown serviceKey")
         duplicate = _duplicate(db, service.id, event_id, checksum)
@@ -108,23 +135,9 @@ def ingest(
         # Repository changes serialize with new incident creation; a changed path requires a new Git check.
         if service.repository_path != repo_path:
             raise AehError(503, "AEH-GIT-503-001", "Repository changed during event receipt; retry")
-        incident = db.scalar(
-            select(Incident)
-            .where(
-                Incident.service_id == service.id,
-                Incident.fingerprint == normalized["fingerprint"],
-                Incident.base_commit_sha == sha,
-                Incident.state.in_(OPEN_STATES),
-            )
-            .with_for_update()
-        )
+        incident = repository.open_incident(service.id, normalized["fingerprint"], sha)
         if incident is None:
-            db.execute(text("SELECT pg_advisory_xact_lock(394771029)"))
-            pending = db.scalar(
-                select(func.count()).select_from(Job).where(Job.status.in_(["PENDING", "RUNNING"]))
-            )
-            if pending >= Limits.job_limit:
-                raise AehError(503, "AEH-JOB-503-001", "Pending job limit reached")
+            _require_job_capacity(db, repository)
         row = ErrorEvent(
             service_id=service.id,
             event_id=event_id,
@@ -215,13 +228,15 @@ def patch_response(run: PatchRun) -> dict:
     }
 
 
-def incident_summary(db: Session, incident: Incident) -> dict:
-    service = db.get(Service, incident.service_id)
-    if service is None:
-        raise AehError(500, "AEH-INTERNAL-500-001", "Incident service is missing")
+def incident_summary(db: Session, incident: Incident, service_key: str | None = None) -> dict:
+    if service_key is None:
+        service = IncidentRepository(db).service_by_id(incident.service_id)
+        if service is None:
+            raise AehError(500, "AEH-INTERNAL-500-001", "Incident service is missing")
+        service_key = service.key
     return {
         "id": str(incident.id),
-        "serviceKey": service.key,
+        "serviceKey": service_key,
         "state": incident.state,
         "fingerprint": incident.fingerprint,
         "occurrenceCount": incident.occurrence_count,
@@ -231,11 +246,12 @@ def incident_summary(db: Session, incident: Incident) -> dict:
 
 
 def incident_detail(db: Session, incident: Incident) -> dict:
-    event = db.get(ErrorEvent, incident.first_error_event_id)
+    repository = ReviewRepository(db)
+    event = repository.first_event(incident)
     if event is None:
         raise AehError(500, "AEH-INTERNAL-500-001", "Incident input event is missing")
-    analysis = db.scalar(select(AnalysisRun).where(AnalysisRun.incident_id == incident.id))
-    patch = db.scalar(select(PatchRun).where(PatchRun.incident_id == incident.id))
+    analysis = repository.analysis(incident.id)
+    patch = repository.patch(incident.id)
     return {
         **incident_summary(db, incident),
         "version": incident.version,
@@ -276,42 +292,47 @@ def list_incidents(
 ) -> dict:
     if not 1 <= limit <= 100:
         raise AehError(400, "AEH-EVENT-400-001", "limit must be between 1 and 100")
-    query = select(Incident).join(Service, Incident.service_id == Service.id)
-    if service_key:
-        query = query.where(Service.key == service_key)
-    if state:
-        query = query.where(Incident.state == state)
-    if cursor:
-        created, row_id = _cursor_decode(settings.cursor_secret, cursor)
-        query = query.where(
-            or_(
-                Incident.created_at < created,
-                and_(Incident.created_at == created, Incident.id < row_id),
-            )
-        )
-    rows = db.scalars(
-        query.order_by(Incident.created_at.desc(), Incident.id.desc()).limit(limit + 1)
-    ).all()
+    before = _cursor_decode(settings.cursor_secret, cursor) if cursor else None
+    rows = IncidentRepository(db).list_rows(service_key, state, before, limit + 1)
     return {
-        "items": [incident_summary(db, row) for row in rows[:limit]],
-        "nextCursor": _cursor_encode(settings.cursor_secret, rows[limit - 1])
+        "items": [incident_summary(db, row, key) for row, key in rows[:limit]],
+        "nextCursor": _cursor_encode(settings.cursor_secret, rows[limit - 1][0])
         if len(rows) > limit
         else None,
     }
 
 
 def approve(factory: sessionmaker, incident_id: uuid.UUID, key: uuid.UUID) -> dict:
-    with factory.begin() as db:
+    try:
+        return _approve_once(factory, incident_id, key)
+    except IntegrityError as exc:
+        sqlstate = getattr(exc.orig, "sqlstate", None)
+        if sqlstate != "23505" and "UNIQUE constraint failed" not in str(exc.orig):
+            raise
+        with factory() as db:
+            existing = db.scalar(select(Approval).where(Approval.idempotency_key == key))
+            if existing and existing.incident_id != incident_id:
+                raise AehError(
+                    409, "AEH-APPROVAL-409-001", "Idempotency-Key belongs to another incident"
+                ) from exc
+        return _approve_once(factory, incident_id, key)
+
+
+def _approve_once(factory: sessionmaker, incident_id: uuid.UUID, key: uuid.UUID) -> dict:
+    with write_transaction(factory) as db:
+        repository = IncidentRepository(db)
         incident = db.scalar(select(Incident).where(Incident.id == incident_id).with_for_update())
         if incident is None:
             raise AehError(404, "AEH-EVENT-404-001", "Incident not found")
-        existing_key = db.scalar(select(Approval).where(Approval.idempotency_key == key))
+        existing_key = repository.approval_by_key(key)
         if existing_key:
             if existing_key.incident_id != incident_id:
                 raise AehError(
                     409, "AEH-APPROVAL-409-001", "Idempotency-Key belongs to another incident"
                 )
-            patch = db.scalar(select(PatchRun).where(PatchRun.approval_id == existing_key.id))
+            patch = repository.patch_by_approval(existing_key.id)
+            if patch is None:
+                raise AehError(500, "AEH-INTERNAL-500-001", "Approval has no patch run")
             return {
                 "incidentId": str(incident.id),
                 "approvalId": str(existing_key.id),
@@ -321,19 +342,16 @@ def approve(factory: sessionmaker, incident_id: uuid.UUID, key: uuid.UUID) -> di
             }
         if incident.state != "AWAITING_APPROVAL":
             raise AehError(409, "AEH-APPROVAL-409-001", "Incident is not awaiting approval")
-        runs = db.scalars(
-            select(AnalysisRun).where(
-                AnalysisRun.incident_id == incident.id, AnalysisRun.status == "SUCCEEDED"
-            )
-        ).all()
+        runs = repository.successful_analysis(incident.id)
         if (
             len(runs) != 1
             or not runs[0].policy_snapshot
             or runs[0].base_commit_sha != incident.base_commit_sha
         ):
             raise AehError(409, "AEH-APPROVAL-409-002", "Successful analysis and SHA do not match")
-        if db.scalar(select(Approval.id).where(Approval.incident_id == incident.id)):
+        if repository.approval_for_incident(incident.id):
             raise AehError(409, "AEH-APPROVAL-409-001", "Incident is already approved")
+        _require_job_capacity(db, repository)
         approval = Approval(
             incident_id=incident.id,
             analysis_run_id=runs[0].id,

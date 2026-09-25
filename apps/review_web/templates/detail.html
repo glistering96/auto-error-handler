@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}사건 {{ incident.id[:8] }}{% endblock %}
+{% block content %}
+<nav class="breadcrumb"><a href="/review/incidents">← 사건 목록</a></nav>
+<section class="hero detail-hero">
+  <p class="eyebrow">INCIDENT DETAIL</p>
+  <div class="title-row"><h1>{{ incident.serviceKey }}</h1><span class="status status-{{ incident.state|lower }}">{{ incident.state }}</span></div>
+  <p class="mono fingerprint">{{ incident.fingerprint }}</p>
+  <div class="meta-grid">
+    <div><span>사건 ID</span><strong class="mono">{{ incident.id }}</strong></div>
+    <div><span>발생 횟수</span><strong>{{ incident.occurrenceCount }}건</strong></div>
+    <div><span>기준 커밋</span><strong class="mono" title="{{ incident.baseCommitSha }}">{{ incident.baseCommitSha[:12] }}</strong></div>
+    <div><span>환경</span><strong>{{ incident.environment }}</strong></div>
+  </div>
+</section>
+<div class="detail-layout">
+  <div class="main-column">
+    <section class="panel">
+      <div class="section-heading"><h2>접수된 오류</h2><span>첫 번째 이벤트</span></div>
+      <p class="error-message">{{ first_event.message or '오류 메시지 없음' }}</p>
+      {% if first_event.reproduction %}<div class="text-block"><h3>재현 절차</h3><pre>{{ first_event.reproduction | tojson(indent=2) }}</pre></div>{% endif %}
+      <details><summary>저장된 이벤트 데이터 보기</summary><pre class="code-block">{{ first_event_json }}</pre></details>
+    </section>
+    <section class="panel">
+      <div class="section-heading"><h2>Codex 분석</h2>{% if analysis %}<span class="status status-{{ analysis.status|lower }}">{{ analysis.status }}</span>{% endif %}</div>
+      {% if analysis and analysis.result %}
+        <p class="lead">{{ analysis.result.summary }}</p>
+        <div class="callout"><span>추정 원인</span><p>{{ analysis.result.rootCause }}</p></div>
+        <div class="two-col"><div><span class="field-label">확신도</span><strong>{{ analysis.result.confidence }}</strong></div><div><span class="field-label">위험도</span><strong>{{ analysis.result.risk }}</strong></div></div>
+        {% if analysis.result.evidence %}<h3>근거</h3><ul class="record-list">{% for evidence in analysis.result.evidence %}<li><strong class="mono">{{ evidence.path }}{% if evidence.symbol %} · {{ evidence.symbol }}{% endif %}</strong><p>{{ evidence.explanation }}</p></li>{% endfor %}</ul>{% endif %}
+        {% if analysis.result.proposedChanges %}<h3>제안된 변경</h3><ul class="record-list">{% for change in analysis.result.proposedChanges %}<li><strong class="mono">{{ change.path }}</strong><p>{{ change.purpose }}</p></li>{% endfor %}</ul>{% endif %}
+      {% elif analysis %}<p class="muted">{{ analysis.error or '분석이 진행 중입니다.' }}</p>
+      {% else %}<p class="muted">분석이 아직 시작되지 않았습니다.</p>{% endif %}
+    </section>
+    <section class="panel">
+      <div class="section-heading"><h2>패치와 검증</h2>{% if patch %}<span class="status status-{{ patch.status|lower }}">{{ patch.status }}</span>{% endif %}</div>
+      {% if patch %}
+        {% if patch.changedFiles %}<p class="field-label">변경 파일</p><ul class="file-list">{% for file in patch.changedFiles %}<li class="mono">{{ file }}</li>{% endfor %}</ul>{% endif %}
+        {% if patch.validation %}<h3>등록된 검증</h3><ul class="record-list">{% for check in patch.validation %}<li><div class="list-row"><strong>{{ check.id }}</strong><span class="status status-{{ check.status|lower }}">{{ check.status }}</span></div>{% if check.output %}<details><summary>명령 출력</summary><pre class="code-block">{{ check.output }}</pre></details>{% endif %}</li>{% endfor %}</ul>{% endif %}
+        {% if patch.diff %}<h3>Git diff</h3><pre class="code-block diff">{{ patch.diff }}</pre>{% elif patch.error %}<p class="muted">{{ patch.error }}</p>{% else %}<p class="muted">패치를 처리 중입니다.</p>{% endif %}
+      {% else %}<p class="muted">승인 후 패치 기록이 표시됩니다.</p>{% endif %}
+    </section>
+  </div>
+  <aside class="side-column">
+    <section class="panel"><h2>처리 흐름</h2><ol class="timeline">{% for step in timeline %}<li><strong>{{ step.label }}</strong><time>{{ step.time[:19]|replace('T', ' ') }} UTC</time></li>{% endfor %}</ol></section>
+    <section class="panel"><h2>승인</h2>{% if approval %}<p class="lead">승인 완료</p><p class="subtle mono">{{ approval.id }}</p>{% elif incident.state == 'AWAITING_APPROVAL' %}<p class="muted">분석 결과를 확인한 뒤 Control API에서 명시적으로 승인할 수 있습니다.</p>{% else %}<p class="muted">승인 기록이 없습니다.</p>{% endif %}</section>
+    <section class="panel"><div class="section-heading"><h2>최근 발생</h2><span>최대 20건</span></div><ul class="occurrences">{% for occurrence in occurrences %}<li><time>{{ occurrence.occurredAt[:19]|replace('T', ' ') }} UTC</time><span class="mono" title="{{ occurrence.eventId }}">{{ occurrence.eventId[:8] }}</span><p>{{ occurrence.message }}</p></li>{% endfor %}</ul></section>
+  </aside>
+</div>
+{% endblock %}

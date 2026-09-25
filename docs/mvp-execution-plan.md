@@ -1,5 +1,7 @@
 # Auto Error Handler MVP 실행 계획
 
+이 문서는 최초 PostgreSQL 중심 구현 계획의 기록입니다. 현재 실행 방법과 SQLite 기본값·PostgreSQL 확장 경계는 [README](../README.md), [ADR-0003](decisions/0003-sqlite-local-postgresql-scaleout-and-review.md), [후속 작업 계획](review-web-sqlite-scaleout-plan-2026-09-25.md)을 따릅니다.
+
 상태: MVP 설계·계약 기준 확정 · Phase 1 구현 시작 가능
 작성일: 2026-09-05
 결정 반영: 2026-09-24

@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import shutil
 import subprocess
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 
 from aeh.cli import init_fixture
 from aeh.config import Limits, Settings
@@ -15,6 +17,7 @@ from aeh.contracts import parse_event
 from aeh.db import (
     AnalysisRun,
     Approval,
+    Base,
     ErrorEvent,
     Incident,
     Job,
@@ -25,24 +28,35 @@ from aeh.db import (
 )
 from aeh.errors import AehError
 from aeh.gateway import FakeCodexGateway, SdkCodexGateway
+from aeh.service import sync_services
 from aeh.validation import ValidationFailure, run_validation
 from aeh.worker import Outcome, claim_job, finalize, heartbeat, recover_expired, run_one
 from apps.control_api.main import create_app
+from apps.review_web.main import create_app as create_review_app
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture
-def system():
-    settings = Settings(service_config_path=ROOT / "services.example.yaml", use_fake_codex=True)
+@pytest.fixture(params=["sqlite", "postgresql"] if os.getenv("TEST_POSTGRES_URL") else ["sqlite"])
+def system(tmp_path, request):
+    database_url = (
+        os.environ["TEST_POSTGRES_URL"]
+        if request.param == "postgresql"
+        else f"sqlite+pysqlite:///{tmp_path / 'test.db'}"
+    )
+    settings = Settings(
+        database_url=database_url,
+        service_config_path=ROOT / "services.example.yaml",
+        repository_root=tmp_path / "repositories",
+        workspace_root=tmp_path / "workspaces",
+        use_fake_codex=True,
+    )
     init_fixture(settings)
     factory = make_session_factory(settings)
-    with factory.begin() as db:
-        db.execute(
-            text(
-                "TRUNCATE jobs, patch_runs, approvals, analysis_runs, occurrences, incidents, error_events, services CASCADE"
-            )
-        )
+    if request.param == "postgresql":
+        Base.metadata.drop_all(factory.kw["bind"])
+    Base.metadata.create_all(factory.kw["bind"])
+    sync_services(settings, factory)
     with TestClient(create_app(settings, factory)) as client:
         yield settings, factory, client
 
@@ -137,6 +151,36 @@ def test_full_fake_flow_and_idempotency(system):
     assert not any((settings.workspace_root / "patch").iterdir())
 
 
+def test_review_web_shows_receipt_analysis_and_patch(system):
+    settings, factory, client = system
+    event = event_data()
+    event["message"] = "<script>alert(1)</script>"
+    incident_id = send(client, event).json()["incidentId"]
+    with TestClient(create_review_app(settings, factory)) as review:
+        overview = review.get("/review/incidents")
+        assert overview.status_code == 200
+        assert incident_id in overview.text
+        assert "오류 처리 내역" in overview.text
+        first = review.get(f"/review/incidents/{incident_id}")
+        assert first.status_code == 200
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in first.text
+        assert "<script>alert(1)</script>" not in first.text
+        claim = claim_job(settings, factory)
+        assert asyncio.run(run_one(settings, factory, FakeCodexGateway(), claim))
+        analyzed = review.get(f"/review/incidents/{incident_id}")
+        assert "Fixture API returns an error" in analyzed.text
+        client.post(
+            f"/v1/incidents/{incident_id}/approve",
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+        )
+        claim = claim_job(settings, factory)
+        assert asyncio.run(run_one(settings, factory, FakeCodexGateway(), claim))
+        patched = review.get(f"/review/incidents/{incident_id}")
+        assert "PATCH_READY" in patched.text
+        assert "Git diff" in patched.text
+        assert "PASSED" in patched.text
+
+
 def test_old_claim_cannot_heartbeat_or_finalize(system):
     settings, factory, client = system
     send(client, event_data())
@@ -181,9 +225,93 @@ def test_lost_lease_cancels_running_analysis(system, monkeypatch):
 def test_two_workers_do_not_claim_one_job(system):
     settings, factory, client = system
     send(client, event_data())
+    workers = [
+        settings.model_copy(update={"worker_id": "worker-a"}),
+        settings.model_copy(update={"worker_id": "worker-b"}),
+    ]
     with ThreadPoolExecutor(max_workers=2) as pool:
-        claims = list(pool.map(lambda _: claim_job(settings, factory), range(2)))
+        claims = list(pool.map(lambda worker: claim_job(worker, factory), workers))
     assert sum(claim is not None for claim in claims) == 1
+    with factory() as db:
+        job = db.scalar(select(Job))
+        assert job.locked_by in {"worker-a", "worker-b"}
+
+
+def test_parallel_receipt_preserves_idempotency_and_grouping(system):
+    _, factory, client = system
+    event = event_data()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        responses = list(pool.map(lambda _: send(client, event), range(8)))
+    assert all(response.status_code == 202 for response in responses)
+    assert sum(not response.json()["duplicate"] for response in responses) == 1
+    incident_id = responses[0].json()["incidentId"]
+    events = [{**event, "eventId": str(uuid.uuid4())} for _ in range(8)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        grouped = list(pool.map(lambda item: send(client, item), events))
+    assert all(response.status_code == 202 for response in grouped)
+    assert {response.json()["incidentId"] for response in grouped} == {incident_id}
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(ErrorEvent)) == 9
+        assert db.scalar(select(func.count()).select_from(Occurrence)) == 9
+        assert db.scalar(select(func.count()).select_from(Job)) == 1
+        assert db.get(Incident, uuid.UUID(incident_id)).occurrence_count == 9
+
+
+def test_parallel_approval_key_cannot_approve_two_incidents(system):
+    settings, factory, client = system
+    first = event_data()
+    second = {**first, "eventId": str(uuid.uuid4()), "fingerprint": "separate-incident"}
+    incident_ids = [send(client, item).json()["incidentId"] for item in (first, second)]
+    for _ in incident_ids:
+        claim = claim_job(settings, factory)
+        assert claim and asyncio.run(run_one(settings, factory, FakeCodexGateway(), claim))
+    key = str(uuid.uuid4())
+
+    def approve_one(incident_id):
+        return client.post(f"/v1/incidents/{incident_id}/approve", headers={"Idempotency-Key": key})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(approve_one, incident_ids))
+    assert sorted(result.status_code for result in results) == [202, 409]
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Approval)) == 1
+        assert db.scalar(select(func.count()).select_from(PatchRun)) == 1
+
+
+def test_approval_respects_global_job_limit(system, monkeypatch):
+    settings, factory, client = system
+    first = event_data()
+    incident_id = send(client, first).json()["incidentId"]
+    claim = claim_job(settings, factory)
+    assert claim and asyncio.run(run_one(settings, factory, FakeCodexGateway(), claim))
+    second = {**first, "eventId": str(uuid.uuid4()), "fingerprint": "another-pending-job"}
+    assert send(client, second).status_code == 202
+    monkeypatch.setattr(Limits, "job_limit", 1)
+    response = client.post(
+        f"/v1/incidents/{incident_id}/approve",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+    )
+    assert response.status_code == 503
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Approval)) == 0
+        assert db.get(Incident, uuid.UUID(incident_id)).state == "AWAITING_APPROVAL"
+
+
+def test_worker_uses_its_own_repository_root(system, tmp_path):
+    settings, factory, client = system
+    incident_id = send(client, event_data()).json()["incidentId"]
+    replica_root = tmp_path / "replica-repositories"
+    replica_root.mkdir()
+    shutil.copytree(settings.repository_root / "fixture-api", replica_root / "fixture-api")
+    replica = settings.model_copy(
+        update={
+            "repository_root": replica_root,
+            "workspace_root": tmp_path / "replica-workspaces",
+        }
+    )
+    claim = claim_job(replica, factory)
+    assert claim and asyncio.run(run_one(replica, factory, FakeCodexGateway(), claim))
+    assert client.get(f"/v1/incidents/{incident_id}/analysis").json()["status"] == "SUCCEEDED"
 
 
 def test_policy_snapshot_survives_service_update(system):

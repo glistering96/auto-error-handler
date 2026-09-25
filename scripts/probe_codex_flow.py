@@ -11,6 +11,7 @@ from aeh.cli import init_fixture
 from aeh.config import Settings
 from aeh.db import make_session_factory
 from aeh.gateway import SdkCodexGateway
+from aeh.service import sync_services
 from aeh.worker import claim_job, run_one
 from apps.control_api.main import create_app
 
@@ -19,6 +20,7 @@ def main() -> None:
     settings = Settings(use_fake_codex=False)
     init_fixture(settings)
     factory = make_session_factory(settings)
+    sync_services(settings, factory)
     event = json.loads((Path(__file__).resolve().parents[1] / "fixtures/event.json").read_text())
     event["eventId"] = str(uuid.uuid4())
     event["fingerprint"] += ":" + event["eventId"]

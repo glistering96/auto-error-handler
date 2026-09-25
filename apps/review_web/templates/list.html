@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}사건 목록{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">INCIDENT REVIEW</p>
+  <h1>오류 처리 내역</h1>
+  <p>접수된 사건의 상태를 확인하고 분석·패치·검증 기록을 살펴보세요.</p>
+</section>
+<section class="panel filter-panel" aria-label="사건 필터">
+  <form method="get" action="/review/incidents" class="filter-form">
+    <label>서비스 <input type="search" name="serviceKey" value="{{ service_key }}" placeholder="예: fixture-api"></label>
+    <label>상태
+      <select name="state">
+        <option value="">전체</option>
+        {% for choice in states %}<option value="{{ choice }}" {% if choice == state %}selected{% endif %}>{{ choice }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>표시 개수
+      <select name="limit">
+        {% for count in [20, 50, 100] %}<option value="{{ count }}" {% if count == limit %}selected{% endif %}>{{ count }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">조회</button>
+  </form>
+</section>
+<section class="panel list-panel" aria-label="사건 목록">
+  <div class="section-heading"><h2>사건</h2><span>현재 페이지 {{ items|length }}건</span></div>
+  {% if items %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>서비스 / 사건</th><th>상태</th><th>발생</th><th>최초 접수</th><th></th></tr></thead>
+    <tbody>
+    {% for item in items %}
+    <tr>
+      <td><strong>{{ item.serviceKey }}</strong><span class="subtle mono truncate" title="{{ item.fingerprint }}">{{ item.fingerprint }}</span></td>
+      <td><span class="status status-{{ item.state|lower }}">{{ item.state }}</span></td>
+      <td>{{ item.occurrenceCount }}건</td>
+      <td class="subtle">{{ item.createdAt[:19]|replace('T', ' ') }} UTC</td>
+      <td><a class="row-link" href="/review/incidents/{{ item.id }}" aria-label="사건 상세 보기">상세 보기 →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="empty"><strong>조건에 맞는 사건이 없습니다.</strong><p>다른 서비스나 상태로 다시 조회해 보세요.</p></div>
+  {% endif %}
+  {% if next_query %}<div class="pagination"><a href="/review/incidents?{{ next_query }}">다음 페이지 →</a></div>{% endif %}
+</section>
+{% endblock %}

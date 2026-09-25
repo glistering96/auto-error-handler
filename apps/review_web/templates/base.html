@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}오류 처리 리뷰{% endblock %} · Auto Error Handler</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/review.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="/review/incidents"><span class="brand-mark">↗</span><span>Auto Error Handler <small>REVIEW</small></span></a>
+      <span class="header-note">오류 접수와 처리 기록</span>
+    </div>
+  </header>
+  <main class="shell">{% block content %}{% endblock %}</main>
+  <footer class="shell site-footer">저장된 오류 사건을 읽기 전용으로 확인합니다.</footer>
+</body>
+</html>

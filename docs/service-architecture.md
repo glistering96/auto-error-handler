@@ -1,5 +1,7 @@
 # Auto Error Handler MVP 서비스 아키텍처
 
+아래 그림은 최초 PostgreSQL 중심 설계 흐름을 보여줍니다. 현재 구현은 로컬 SQLite와 다중 호스트 PostgreSQL을 지원하며, 별도 읽기 전용 리뷰 웹을 제공합니다. DB별 동시성·저장소 경로 계약은 [ADR-0003](decisions/0003-sqlite-local-postgresql-scaleout-and-review.md)을 따릅니다.
+
 상태: 구현 전 설계 — 확정된 의사결정 반영
 작성일: 2026-09-01  
 범위: 기능 검증용 단일 서비스 MVP

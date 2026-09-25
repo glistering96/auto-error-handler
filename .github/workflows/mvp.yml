@@ -21,7 +21,7 @@ jobs:
           --health-timeout 2s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql+psycopg://aeh:aeh@localhost:5432/aeh
+      TEST_POSTGRES_URL: postgresql+psycopg://aeh:aeh@localhost:5432/aeh
       REPOSITORY_ROOT: /tmp/aeh-repositories
       USE_FAKE_CODEX: "true"
     steps:
@@ -31,6 +31,7 @@ jobs:
       - run: uv sync --frozen --python 3.12
       - run: uv run python -m aeh.cli init-fixture
       - run: uv run alembic upgrade head
-      - run: uv run ruff check aeh apps tests scripts
+      - run: DATABASE_URL="$TEST_POSTGRES_URL" uv run alembic upgrade head
+      - run: uv run ruff check aeh apps tests scripts migrations
       - run: uv run mypy aeh apps
       - run: uv run pytest -q
